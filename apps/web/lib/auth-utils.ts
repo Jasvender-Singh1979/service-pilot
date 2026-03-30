@@ -239,9 +239,12 @@ export async function createSession(userId: string) {
  * Get authenticated user from request by reading session cookie
  *
  * Better Auth stores sessions with:
- * - Cookie: __Secure-better-auth.session_token (the session ID)
- * - Database: session table with id = session ID
+ * - Cookie: __Secure-better-auth.session_token = sessionId.signature (signed format)
+ * - Database: session table with id = sessionId (raw ID without signature)
  * - User data: Foreign key to user table via userId
+ * 
+ * CRITICAL: The cookie includes a signature for security (format: ID.SIGNATURE)
+ * We must extract ONLY the session ID part (before the dot) for database lookup.
  * 
  * @returns User object with all fields or null if unauthorized
  */
@@ -249,29 +252,48 @@ export async function getSessionUserFromRequest() {
   try {
     console.log("[Auth Utils] Getting session user from Better Auth...");
 
-    // Get session ID from Better Auth cookie
-    // Better Auth's session token IS the session.id value, not session.token
+    // Get session token from Better Auth cookie
     const cookieStore = await cookies();
-    let sessionId =
+    let sessionToken =
       cookieStore.get("__Secure-better-auth.session_token")?.value ||
       cookieStore.get("better-auth.session_token")?.value ||
       cookieStore.get("auth.session")?.value;
 
-    if (!sessionId) {
+    if (!sessionToken) {
       console.log("[Auth Utils] No session token found in cookies");
       return null;
     }
 
-    console.log("[Auth Utils] Session token found, looking up user...");
+    // TEMPORARY LOGGING: Log raw cookie value
+    console.log("[TEMP_LOG_RAW_COOKIE]", sessionToken);
 
-    // Better Auth stores the session ID in the 'id' field, not 'token' field
-    // The 'token' field is only used for custom manual tokens
+    // CRITICAL FIX: Better Auth cookie format is "sessionId.signature"
+    // Extract ONLY the sessionId part (before the dot)
+    let sessionId = sessionToken;
+    if (sessionToken.includes(".")) {
+      sessionId = sessionToken.split(".")[0];
+      console.log("[Auth Utils] Extracted session ID from signed token");
+    }
+
+    // TEMPORARY LOGGING: Log extracted session ID
+    console.log("[TEMP_LOG_EXTRACTED_ID]", sessionId);
+    
+    // TEMPORARY LOGGING: Log the exact lookup key
+    console.log("[TEMP_LOG_LOOKUP_KEY]", sessionId);
+
+    console.log("[Auth Utils] Looking up session with ID:", sessionId);
+
+    // Better Auth stores the session ID in the 'id' field
+    // Use ONLY session.id, not session.token (which is for manual tokens)
     const sessions = await sql`
       SELECT "userId", "expiresAt"
       FROM session
-      WHERE (id = ${sessionId} OR token = ${sessionId})
+      WHERE id = ${sessionId}
       AND "expiresAt" > NOW()
     `;
+
+    // TEMPORARY LOGGING: Log session lookup row count
+    console.log("[TEMP_LOG_SESSION_ROW_COUNT]", sessions.length);
 
     if (sessions.length === 0) {
       console.log("[Auth Utils] Session not found or expired");
