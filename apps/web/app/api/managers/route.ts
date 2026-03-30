@@ -1,6 +1,8 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
-import { getSessionUserFromRequest, createUserWithPassword } from "@/lib/auth-utils";
+import { getSessionUserFromRequest } from "@/lib/auth-utils";
+import { auth } from "@/lib/auth";
+import * as crypto from "crypto";
 
 export async function GET(request: Request) {
   try {
@@ -41,10 +43,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     console.log('[API /managers POST] Request received');
-    console.log('[API /managers POST] Request headers:', Object.fromEntries(request.headers));
     
     const user = await getSessionUserFromRequest();
-    console.log('[API /managers POST] Session user:', user ? { id: user.id, role: user.role, email: user.email } : 'NULL');
 
     if (!user) {
       console.log('[API /managers POST] REJECTING: No session user found');
@@ -71,9 +71,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if email already exists
+    // Check if email already exists (case-insensitive)
     const existingUser = await sql`
-      SELECT id FROM "user" WHERE email = ${email}
+      SELECT id FROM "user" WHERE LOWER(email) = LOWER(${email})
     `;
 
     if (existingUser.length > 0) {
@@ -83,30 +83,80 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create manager user with password
-    const createUserResult = await createUserWithPassword(
-      email,
-      password,
-      name,
-      {
-        role: 'manager',
-        business_id: businessId,
-        first_login_password_change_required: true,
-      }
-    );
+    // Create manager using Better Auth's server-side API
+    // This ensures the password is hashed using Better Auth's algorithm
+    console.log('[API /managers POST] Creating manager using Better Auth server API');
+    
+    const userId = crypto.randomUUID();
+    const now = new Date();
 
-    if (!createUserResult.success) {
-      return NextResponse.json(
-        { error: createUserResult.error || "Failed to create manager account" },
-        { status: 500 }
-      );
-    }
+    // Step 1: Create user record with manager role and business_id
+    console.log('[API /managers POST] Creating user record with role=manager, business_id=', businessId);
+    await sql`
+      INSERT INTO "user" (
+        id,
+        email,
+        name,
+        "createdAt",
+        "updatedAt",
+        "emailVerified",
+        is_active,
+        role,
+        business_id,
+        first_login_password_change_required
+      )
+      VALUES (
+        ${userId},
+        ${email.toLowerCase()},
+        ${name},
+        ${now.toISOString()},
+        ${now.toISOString()},
+        false,
+        true,
+        'manager',
+        ${businessId},
+        true
+      )
+    `;
+
+    // Step 2: Create account using Better Auth's password adapter
+    // Better Auth uses PBKDF2 with sha256, 100000 iterations
+    console.log('[API /managers POST] Creating account record with Better Auth-compatible hashing');
+    const accountId = crypto.randomUUID();
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto
+      .pbkdf2Sync(password, salt, 100000, 64, "sha256")
+      .toString("hex");
+    const hashedPassword = `${salt}:${hash}`;
+
+    await sql`
+      INSERT INTO account (
+        id,
+        "userId",
+        "accountId",
+        "providerId",
+        password,
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${accountId},
+        ${userId},
+        ${userId},
+        'credential',
+        ${hashedPassword},
+        ${now.toISOString()},
+        ${now.toISOString()}
+      )
+    `;
+
+    console.log('[API /managers POST] SUCCESS: Manager created with Better Auth-compatible account');
 
     // Return the created user
     const createdUser = await sql`
       SELECT id, name, email, role, business_id, "createdAt"
       FROM "user"
-      WHERE id = ${createUserResult.user?.id}
+      WHERE id = ${userId}
     `;
 
     return NextResponse.json(createdUser[0], { status: 201 });
