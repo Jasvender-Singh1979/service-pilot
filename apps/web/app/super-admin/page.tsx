@@ -42,7 +42,9 @@ export default function SuperAdminDashboard() {
 
   async function fetchBusinessId() {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
+        credentials: 'include',
+      });
       const userData = await response.json();
       if (userData.business_id) {
         setBusinessId(userData.business_id);
@@ -54,7 +56,9 @@ export default function SuperAdminDashboard() {
 
   async function fetchStats() {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stats?businessId=${businessId}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stats?businessId=${businessId}`, {
+        credentials: 'include',
+      });
       const data = await response.json();
       setStats(data);
     } catch (error) {

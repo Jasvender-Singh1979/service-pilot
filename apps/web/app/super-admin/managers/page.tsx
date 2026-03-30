@@ -50,7 +50,9 @@ export default function ManagersPage() {
   const fetchManagers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers`, {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         setManagers(data);
@@ -77,6 +79,7 @@ export default function ManagersPage() {
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               name: formData.name,
               email: formData.email,
@@ -93,6 +96,7 @@ export default function ManagersPage() {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(formData),
         });
 
@@ -133,6 +137,7 @@ export default function ManagersPage() {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers/${id}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       if (!response.ok) {

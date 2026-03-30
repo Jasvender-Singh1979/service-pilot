@@ -103,7 +103,9 @@ export default function ManagerReports() {
   useEffect(() => {
     async function fetchBusinessId() {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
+          credentials: 'include',
+        });
         const userData = await response.json();
         if (userData.business_id) {
           setBusinessId(userData.business_id);
@@ -184,7 +186,10 @@ export default function ManagerReports() {
       params.append("endDate", end);
       
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reports?${params.toString()}`
+        `${process.env.NEXT_PUBLIC_API_URL}/api/reports?${params.toString()}`,
+        {
+          credentials: 'include',
+        }
       );
       
       if (!response.ok) {
