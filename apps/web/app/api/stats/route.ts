@@ -5,6 +5,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const managerEmail = searchParams.get('managerEmail');
+    const businessId = searchParams.get('businessId');
+    
+    console.log('[API /stats] GET request received');
+    console.log('[API /stats] URL:', request.url);
+    console.log('[API /stats] managerEmail:', managerEmail);
+    console.log('[API /stats] businessId:', businessId);
 
     if (managerEmail) {
       // Manager-specific stats
@@ -84,12 +90,15 @@ export async function GET(request: Request) {
         let totalEngineers = 0;
 
         try {
+          console.log('[API /stats] Querying users with businessId:', businessId);
           const usersResult = await sql`
             SELECT COUNT(*) as count FROM "user" WHERE business_id = ${businessId}
           `;
+          console.log('[API /stats] Users query result:', usersResult);
           if (usersResult && usersResult[0]) {
             totalUsers = parseInt(String(usersResult[0].count)) || 0;
           }
+          console.log('[API /stats] Total users count:', totalUsers);
         } catch (e) {
           console.error('Error counting users:', e instanceof Error ? e.message : String(e));
         }

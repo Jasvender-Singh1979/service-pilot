@@ -40,16 +40,23 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    console.log('[API /managers POST] Request received');
+    console.log('[API /managers POST] Request headers:', Object.fromEntries(request.headers));
+    
     const user = await getSessionUserFromRequest();
+    console.log('[API /managers POST] Session user:', user ? { id: user.id, role: user.role, email: user.email } : 'NULL');
 
     if (!user) {
+      console.log('[API /managers POST] REJECTING: No session user found');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Only super admin can create managers
     if (user.role !== "super_admin") {
+      console.log('[API /managers POST] REJECTING: User role is', user.role, 'not super_admin');
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    console.log('[API /managers POST] User authorized as super_admin');
 
     const businessId = user.business_id;
 
