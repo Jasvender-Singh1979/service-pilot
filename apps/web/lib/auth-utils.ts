@@ -238,35 +238,38 @@ export async function createSession(userId: string) {
 /**
  * Get authenticated user from request by reading session cookie
  *
+ * Better Auth stores sessions with:
+ * - Cookie: __Secure-better-auth.session_token (the session ID)
+ * - Database: session table with id = session ID
+ * - User data: Foreign key to user table via userId
+ * 
  * @returns User object with all fields or null if unauthorized
  */
 export async function getSessionUserFromRequest() {
   try {
-    console.log("[Auth Utils] Getting session user...");
+    console.log("[Auth Utils] Getting session user from Better Auth...");
 
-    // Get session token from cookies
-    // Try actual Better Auth cookie names in order:
-    // 1. __Secure-better-auth.session_token (secure, real runtime cookie)
-    // 2. better-auth.session_token (fallback for non-secure contexts)
-    // 3. auth.session (legacy fallback)
+    // Get session ID from Better Auth cookie
+    // Better Auth's session token IS the session.id value, not session.token
     const cookieStore = await cookies();
-    let sessionToken =
+    let sessionId =
       cookieStore.get("__Secure-better-auth.session_token")?.value ||
       cookieStore.get("better-auth.session_token")?.value ||
       cookieStore.get("auth.session")?.value;
 
-    if (!sessionToken) {
+    if (!sessionId) {
       console.log("[Auth Utils] No session token found in cookies");
       return null;
     }
 
     console.log("[Auth Utils] Session token found, looking up user...");
 
-    // Find valid session and get user
+    // Better Auth stores the session ID in the 'id' field, not 'token' field
+    // The 'token' field is only used for custom manual tokens
     const sessions = await sql`
       SELECT "userId", "expiresAt"
       FROM session
-      WHERE token = ${sessionToken}
+      WHERE (id = ${sessionId} OR token = ${sessionId})
       AND "expiresAt" > NOW()
     `;
 
