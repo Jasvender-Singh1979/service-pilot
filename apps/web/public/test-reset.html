@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Password Reset</title>
+</head>
+<body>
+  <h1>Testing Manager Password Reset</h1>
+  <button onclick="testReset()">Reset bani@bani.com to Test@12345</button>
+  <pre id="result"></pre>
+
+  <script>
+    async function testReset() {
+      try {
+        const response = await fetch('/api/debug/reset-manager-password?email=bani@bani.com&password=Test@12345');
+        const data = await response.json();
+        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        document.getElementById('result').textContent = 'Error: ' + error.message;
+      }
+    }
+  </script>
+</body>
+</html>

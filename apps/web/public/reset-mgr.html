@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Manager Password</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        pre { background: #f0f0f0; padding: 15px; border-radius: 4px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Manager Password Reset</h1>
+    <button id="resetBtn">Execute Reset</button>
+    <button id="verifyBtn">Verify Password</button>
+    <pre id="result"></pre>
+
+    <script>
+        const resultEl = document.getElementById('result');
+        
+        document.getElementById('resetBtn').addEventListener('click', async () => {
+            resultEl.textContent = 'Calling /api/trigger-reset...';
+            try {
+                const resp = await fetch('/api/trigger-reset');
+                const data = await resp.json();
+                resultEl.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                resultEl.textContent = 'Error: ' + err.message;
+            }
+        });
+
+        document.getElementById('verifyBtn').addEventListener('click', async () => {
+            resultEl.textContent = 'Calling /api/debug/manager-password-reset with verify action...';
+            try {
+                const resp = await fetch('/api/debug/manager-password-reset?action=verify&email=bani@bani.com&password=Test@12345');
+                const data = await resp.json();
+                resultEl.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                resultEl.textContent = 'Error: ' + err.message;
+            }
+        });
+
+        // Auto-trigger reset on load
+        setTimeout(() => {
+            document.getElementById('resetBtn').click();
+        }, 1000);
+    </script>
+</body>
+</html>
