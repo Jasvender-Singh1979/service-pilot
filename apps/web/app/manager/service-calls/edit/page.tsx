@@ -136,8 +136,8 @@ function EditServiceCallContent() {
       try {
         // Fetch both form data and service call in parallel for better performance
         const [formDataResponse, callResponse] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/form-data`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${callId}`),
+          fetch(`/api/service-calls/form-data`),
+          fetch(`/api/service-calls/${callId}`),
         ]);
 
         if (!formDataResponse.ok) throw new Error('Failed to load form data');
@@ -286,7 +286,7 @@ function EditServiceCallContent() {
           uploadFormData.append('file', imageFile);
 
           const uploadResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
+            `/api/upload`,
             {
               method: 'POST',
               body: uploadFormData,
@@ -330,7 +330,7 @@ function EditServiceCallContent() {
 
       // Update service call
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${callId}`,
+        `/api/service-calls/${callId}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

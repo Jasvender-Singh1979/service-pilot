@@ -46,7 +46,7 @@ function EditEngineerContent() {
       // Create a request to get all engineers then find the one with this ID
       // This is necessary because there's no direct GET endpoint for a single engineer
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers`
+        `/api/engineers`
       );
 
       if (!response.ok) {
@@ -86,7 +86,7 @@ function EditEngineerContent() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/${engineer.id}`,
+        `/api/engineers/${engineer.id}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

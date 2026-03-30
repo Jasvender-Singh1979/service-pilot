@@ -227,7 +227,7 @@ function CloseCallContent() {
       if (imageFile) {
         const uploadFormData = new FormData();
         uploadFormData.append('file', imageFile);
-        const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload`, {
+        const uploadRes = await fetch(`/api/upload`, {
           method: 'POST',
           body: uploadFormData,
         });
@@ -240,7 +240,7 @@ function CloseCallContent() {
 
       // Submit closure
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/${callId}/close`,
+        `/api/engineers/service-calls/${callId}/close`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

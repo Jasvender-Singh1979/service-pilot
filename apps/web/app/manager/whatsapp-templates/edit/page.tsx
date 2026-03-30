@@ -49,7 +49,7 @@ function EditWhatsAppTemplateContent() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/whatsapp-templates/${templateId}`
+        `/api/whatsapp-templates/${templateId}`
       );
 
       if (!response.ok) {
@@ -124,7 +124,7 @@ function EditWhatsAppTemplateContent() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/whatsapp-templates/${templateId}`,
+        `/api/whatsapp-templates/${templateId}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

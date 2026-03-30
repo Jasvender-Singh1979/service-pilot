@@ -38,7 +38,7 @@ export default function TeamAttendanceWidget() {
       setLoading(true);
       setError(null);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/attendance/team`,
+        `/api/attendance/team`,
         {
           credentials: 'include',
         }

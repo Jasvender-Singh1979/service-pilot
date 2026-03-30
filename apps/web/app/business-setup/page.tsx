@@ -46,7 +46,7 @@ export default function BusinessSetupPage() {
       // Step 2: Create business
       console.log('[Setup] 4. Creating business...');
       const businessResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/business`,
+        `/api/business`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -73,7 +73,7 @@ export default function BusinessSetupPage() {
       // Step 3: Set user as super_admin for this business
       console.log('[Setup] 6. Setting up super_admin role...');
       const setupResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/user/setup-admin`,
+        `/api/user/setup-admin`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -98,7 +98,7 @@ export default function BusinessSetupPage() {
       // Step 4: Fetch fresh user data to ensure role is updated
       console.log('[Setup] 8. Fetching fresh user data with updated role...');
       const freshUserResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/user/by-email?email=${encodeURIComponent(email)}`
+        `/api/user/by-email?email=${encodeURIComponent(email)}`
       );
 
       if (!freshUserResponse.ok) {

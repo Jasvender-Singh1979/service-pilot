@@ -88,7 +88,7 @@ function QuotationContent() {
       if (callData.business_id) {
         try {
           const businessRes = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/business/${callData.business_id}`,
+            `/api/business/${callData.business_id}`,
             { credentials: 'include' }
           );
 

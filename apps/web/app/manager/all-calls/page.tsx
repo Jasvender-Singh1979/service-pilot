@@ -67,7 +67,7 @@ function AllCallsContent() {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls?${queryParams.toString()}`
+        `/api/service-calls?${queryParams.toString()}`
       );
 
       if (!response.ok) {

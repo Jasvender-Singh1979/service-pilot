@@ -61,7 +61,7 @@ export default function CustomerHistory({
         params.set('currentCallId', currentCallId);
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/customer-history?${params}`,
+          `/api/service-calls/customer-history?${params}`,
           {
             credentials: 'include',
           }

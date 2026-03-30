@@ -110,7 +110,7 @@ function ServiceCallsContent() {
       setLoading(true);
       setError('');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls`
+        `/api/service-calls`
       );
       if (!response.ok) throw new Error('Failed to load service calls');
       const data = await response.json();
@@ -128,7 +128,7 @@ function ServiceCallsContent() {
     try {
       setHistoryLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${callId}/history`
+        `/api/service-calls/${callId}/history`
       );
       if (response.ok) {
         const data = await response.json();
@@ -145,7 +145,7 @@ function ServiceCallsContent() {
     try {
       setTemplatesLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/whatsapp-templates`
+        `/api/whatsapp-templates`
       );
       if (response.ok) {
         const data = await response.json();
@@ -162,7 +162,7 @@ function ServiceCallsContent() {
   const fetchSentTemplates = async (callId: string) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${callId}/template-send`
+        `/api/service-calls/${callId}/template-send`
       );
       if (response.ok) {
         const data = await response.json();
@@ -179,7 +179,7 @@ function ServiceCallsContent() {
     setNoteSaving(true);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${selectedCall.id}/note`,
+        `/api/service-calls/${selectedCall.id}/note`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -271,7 +271,7 @@ function ServiceCallsContent() {
     setActionLoading(true);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${selectedCall.id}`,
+        `/api/service-calls/${selectedCall.id}`,
         { method: 'DELETE' }
       );
       if (!response.ok) {
@@ -293,7 +293,7 @@ function ServiceCallsContent() {
     setActionLoading(true);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${selectedCall.id}`,
+        `/api/service-calls/${selectedCall.id}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -741,7 +741,7 @@ function ServiceCallsContent() {
                     if (selectedCall && pendingTemplate && pendingTemplate !== 'custom') {
                       try {
                         await fetch(
-                          `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${selectedCall.id}/template-send`,
+                          `/api/service-calls/${selectedCall.id}/template-send`,
                           {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -779,7 +779,7 @@ function ServiceCallsContent() {
                     if (selectedCall && pendingTemplate && pendingTemplate !== 'custom') {
                       try {
                         await fetch(
-                          `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${selectedCall.id}/template-send`,
+                          `/api/service-calls/${selectedCall.id}/template-send`,
                           {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -818,7 +818,7 @@ function ServiceCallsContent() {
                     if (selectedCall && pendingTemplate && pendingTemplate !== 'custom') {
                       try {
                         await fetch(
-                          `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${selectedCall.id}/template-send`,
+                          `/api/service-calls/${selectedCall.id}/template-send`,
                           {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },

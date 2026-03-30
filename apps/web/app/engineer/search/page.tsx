@@ -55,7 +55,7 @@ function EngineerSearchContent() {
       setLoading(true);
       setSearched(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/search?q=${encodeURIComponent(searchQuery)}`,
+        `/api/engineers/service-calls/search?q=${encodeURIComponent(searchQuery)}`,
         {
           credentials: 'include',
         }

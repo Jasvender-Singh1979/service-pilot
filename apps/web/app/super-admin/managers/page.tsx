@@ -50,7 +50,7 @@ export default function ManagersPage() {
   const fetchManagers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers`, {
+      const response = await fetch(`/api/managers`, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -75,7 +75,7 @@ export default function ManagersPage() {
       if (editingManager) {
         // Update manager
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/managers/${editingManager.id}`,
+          `/api/managers/${editingManager.id}`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -93,7 +93,7 @@ export default function ManagersPage() {
         }
       } else {
         // Create manager
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers`, {
+        const response = await fetch(`/api/managers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -135,7 +135,7 @@ export default function ManagersPage() {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers/${id}`, {
+      const response = await fetch(`/api/managers/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       });

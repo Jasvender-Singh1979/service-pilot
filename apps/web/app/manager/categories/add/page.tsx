@@ -35,7 +35,7 @@ export default function AddCategoryPage() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/categories`,
+        `/api/categories`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

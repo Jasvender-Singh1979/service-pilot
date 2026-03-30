@@ -35,7 +35,7 @@ export default function ManageCategoriesPage() {
       setLoading(true);
       setError('');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/categories`
+        `/api/categories`
       );
 
       if (!response.ok) {
@@ -74,7 +74,7 @@ export default function ManageCategoriesPage() {
   async function toggleCategoryStatus(categoryId: string, newStatus: boolean) {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/categories/${categoryId}`,
+        `/api/categories/${categoryId}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

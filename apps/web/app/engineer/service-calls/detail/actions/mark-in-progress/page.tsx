@@ -36,7 +36,7 @@ function MarkInProgressContent() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/detail?callId=${callId}`,
+        `/api/engineers/service-calls/detail?callId=${callId}`,
         {
           credentials: 'include',
         }
@@ -65,7 +65,7 @@ function MarkInProgressContent() {
       setError('');
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/${callId}/update-status`,
+        `/api/engineers/service-calls/${callId}/update-status`,
         {
           method: 'PUT',
           credentials: 'include',

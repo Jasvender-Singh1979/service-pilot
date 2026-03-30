@@ -36,7 +36,7 @@ export default function WhatsAppTemplatesPage() {
       setLoading(true);
       setError('');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/whatsapp-templates`
+        `/api/whatsapp-templates`
       );
 
       if (!response.ok) {
@@ -69,7 +69,7 @@ export default function WhatsAppTemplatesPage() {
   async function handleDelete(templateId: string) {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/whatsapp-templates/${templateId}`,
+        `/api/whatsapp-templates/${templateId}`,
         {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },

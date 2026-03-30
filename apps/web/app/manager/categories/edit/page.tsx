@@ -47,7 +47,7 @@ function EditCategoryContent() {
       setLoading(true);
       setError('');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/categories/${categoryId}`
+        `/api/categories/${categoryId}`
       );
 
       if (!response.ok) {
@@ -81,7 +81,7 @@ function EditCategoryContent() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/categories/${categoryId}`,
+        `/api/categories/${categoryId}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

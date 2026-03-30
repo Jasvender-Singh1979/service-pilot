@@ -123,16 +123,17 @@ export default function SuperAdminReports() {
   useEffect(() => {
     async function fetchBusinessIdAndManagers() {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
+        const response = await fetch(`/api/user/me`, {
           credentials: 'include',
         });
-        const userData = await response.json();
-        if (userData.business_id) {
-          setBusinessId(userData.business_id);
+        if (!response.ok) {
+          router.push('/login');
+          return;
         }
-        
-        // Fetch managers for this business
-        const managersResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/managers`, {
+        const userData = await response.json();
+        setUser(userData);
+
+        const managersResponse = await fetch(`/api/managers`, {
           credentials: 'include',
         });
         const managersData = await managersResponse.json();
@@ -220,7 +221,7 @@ export default function SuperAdminReports() {
       }
       
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reports?${params.toString()}`,
+        `/api/reports?${params.toString()}`,
         {
           credentials: 'include',
         }

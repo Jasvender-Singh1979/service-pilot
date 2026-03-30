@@ -47,7 +47,7 @@ function ServiceCallsContent() {
   const fetchCalls = async () => {
     try {
       setLoading(true);
-      const baseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls`;
+      const baseUrl = `/api/engineers/service-calls`;
       const queryString = statusFilter !== 'all' ? `?status=${encodeURIComponent(statusFilter)}` : '';
       const url = `${baseUrl}${queryString}`;
 

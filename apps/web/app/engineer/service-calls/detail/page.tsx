@@ -123,7 +123,7 @@ function ServiceCallDetailContent() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/detail?callId=${callId}`,
+        `/api/engineers/service-calls/detail?callId=${callId}`,
         {
           credentials: 'include',
         }
@@ -148,7 +148,7 @@ function ServiceCallDetailContent() {
   const fetchHistory = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/${callId}/history`,
+        `/api/service-calls/${callId}/history`,
         {
           credentials: 'include',
         }
@@ -224,7 +224,7 @@ function ServiceCallDetailContent() {
   const logWhatsAppAction = async (actionType: string) => {
     try {
       await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/${callId}/whatsapp-action`,
+        `/api/engineers/service-calls/${callId}/whatsapp-action`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

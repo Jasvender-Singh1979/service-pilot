@@ -85,7 +85,7 @@ function EngineerDashboardContent() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/dashboard?filter=${filter}`,
+        `/api/engineers/dashboard?filter=${filter}`,
         {
           credentials: 'include',
         }
@@ -137,7 +137,7 @@ function EngineerDashboardContent() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/service-calls/search?q=${encodeURIComponent(query)}`,
+        `/api/engineers/service-calls/search?q=${encodeURIComponent(query)}`,
         {
           credentials: 'include',
         }

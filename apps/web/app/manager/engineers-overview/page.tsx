@@ -34,7 +34,7 @@ export default function EngineersOverviewPage() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/stats?managerEmail=${encodeURIComponent(user?.email || '')}`
+        `/api/engineers/stats?managerEmail=${encodeURIComponent(user?.email || '')}`
       );
       
       if (!response.ok) {

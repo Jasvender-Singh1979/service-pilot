@@ -129,7 +129,7 @@ function AddServiceCallContent() {
     const fetchFormData = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/form-data`
+          `/api/service-calls/form-data`
         );
         if (!response.ok) throw new Error('Failed to load form data');
         const data = await response.json();
@@ -239,7 +239,7 @@ function AddServiceCallContent() {
           uploadFormData.append('file', imageFile);
 
           const uploadResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
+            `/api/upload`,
             {
               method: 'POST',
               body: uploadFormData,
@@ -284,7 +284,7 @@ function AddServiceCallContent() {
       // Create service call (exclude selected_whatsapp_template as it's handled in detail view)
       const { selected_whatsapp_template, ...formDataForSubmit } = form;
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls`,
+        `/api/service-calls`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

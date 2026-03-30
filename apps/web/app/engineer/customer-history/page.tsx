@@ -54,7 +54,7 @@ function CustomerHistoryContent() {
       setLoading(true);
       setError('');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/customer-history?countryCode=${encodeURIComponent(countryCode)}&phoneNumber=${encodeURIComponent(phoneNumber)}`,
+        `/api/service-calls/customer-history?countryCode=${encodeURIComponent(countryCode)}&phoneNumber=${encodeURIComponent(phoneNumber)}`,
         {
           credentials: 'include',
         }

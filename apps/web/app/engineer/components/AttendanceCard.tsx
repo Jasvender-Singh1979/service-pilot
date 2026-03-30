@@ -28,7 +28,7 @@ export default function AttendanceCard() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/attendance/today`,
+        `/api/attendance/today`,
         {
           credentials: 'include',
         }
@@ -63,7 +63,7 @@ export default function AttendanceCard() {
     try {
       setActionLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/attendance/check-in`,
+        `/api/attendance/check-in`,
         {
           method: 'POST',
           headers: {
@@ -94,7 +94,7 @@ export default function AttendanceCard() {
     try {
       setActionLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/attendance/check-out`,
+        `/api/attendance/check-out`,
         {
           method: 'POST',
           headers: {

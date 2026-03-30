@@ -42,7 +42,7 @@ export default function SuperAdminDashboard() {
 
   async function fetchBusinessId() {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
+      const response = await fetch(`/api/user/me`, {
         credentials: 'include',
       });
       const userData = await response.json();
@@ -50,13 +50,14 @@ export default function SuperAdminDashboard() {
         setBusinessId(userData.business_id);
       }
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      console.error('Failed to fetch user data:', error);
     }
   }
 
   async function fetchStats() {
+    if (!businessId) return;
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stats?businessId=${businessId}`, {
+      const response = await fetch(`/api/stats?businessId=${businessId}`, {
         credentials: 'include',
       });
       const data = await response.json();

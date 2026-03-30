@@ -19,7 +19,7 @@ export default function HomePage() {
       // If user is authenticated, check their role and redirect to their dashboard
       if (user) {
         try {
-          const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/by-email?email=${encodeURIComponent(user.email)}`);
+          const userResponse = await fetch(`/api/user/by-email?email=${encodeURIComponent(user.email)}`);
           const userData = await userResponse.json();
           
           if (userData.role === 'super_admin') {
@@ -41,7 +41,7 @@ export default function HomePage() {
 
       // User is not authenticated, check if business exists
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/business`);
+        const response = await fetch(`/api/business`);
         
         if (!response.ok) {
           console.error('Error checking business: API returned status', response.status);

@@ -43,7 +43,7 @@ export default function AddEngineerPage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/engineers`, {
+      const response = await fetch(`/api/engineers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

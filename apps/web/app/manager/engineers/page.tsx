@@ -41,7 +41,7 @@ export default function ManageEngineersPage() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers`
+        `/api/engineers`
       );
       
       if (!response.ok) {
@@ -67,7 +67,7 @@ export default function ManageEngineersPage() {
   async function handleToggleActive(engineer: Engineer) {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/${engineer.id}`,
+        `/api/engineers/${engineer.id}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -98,7 +98,7 @@ export default function ManageEngineersPage() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/engineers/${engineerId}`,
+        `/api/engineers/${engineerId}`,
         { method: 'DELETE' }
       );
 

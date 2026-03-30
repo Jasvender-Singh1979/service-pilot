@@ -26,7 +26,7 @@ export default function BottomNav() {
     }
 
     try {
-      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/by-email?email=${encodeURIComponent(user.email)}`);
+      const userResponse = await fetch(`/api/user/by-email?email=${encodeURIComponent(user.email)}`);
       const userData = await userResponse.json();
       
       if (userData.role === 'super_admin') {

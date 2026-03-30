@@ -32,7 +32,7 @@ export function useAuth() {
   const enrichUserWithAppData = async (userEmail: string): Promise<Partial<AuthUser>> => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/user/by-email?email=${encodeURIComponent(userEmail)}`
+        `/api/user/by-email?email=${encodeURIComponent(userEmail)}`
       );
       if (!response.ok) {
         console.warn("[useAuth] Failed to enrich user data:", response.status);

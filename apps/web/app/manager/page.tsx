@@ -111,7 +111,7 @@ export default function ManagerDashboard() {
   async function fetchStats() {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/stats?managerEmail=${encodeURIComponent(user?.email || '')}`
+        `/api/stats?managerEmail=${encodeURIComponent(user?.email || '')}`
       );
       if (!response.ok) {
         throw new Error(`Stats API returned ${response.status}`);
@@ -127,7 +127,7 @@ export default function ManagerDashboard() {
   async function fetchCallCounts() {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/service-calls/counts`
+        `/api/service-calls/counts`
       );
       if (!response.ok) {
         throw new Error(`Call counts API returned ${response.status}`);
@@ -143,7 +143,7 @@ export default function ManagerDashboard() {
   async function fetchPerformanceData() {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/performance`
+        `/api/dashboard/performance`
       );
       if (!response.ok) {
         throw new Error(`Performance API returned ${response.status}`);
@@ -171,7 +171,7 @@ export default function ManagerDashboard() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/search?q=${encodeURIComponent(query)}`
+        `/api/dashboard/search?q=${encodeURIComponent(query)}`
       );
       if (!response.ok) {
         throw new Error(`Search API returned ${response.status}`);
