@@ -74,8 +74,6 @@ export async function createUserWithPassword(
     // Normalize email
     const normalizedEmail = normalizeEmail(email);
 
-    console.log("[Auth Utils] Creating user:", { email: normalizedEmail, name });
-
     // Validate inputs
     if (!normalizedEmail || !password || !name) {
       throw new Error("Email, password, and name are required");
@@ -86,19 +84,16 @@ export async function createUserWithPassword(
     }
 
     // Check if user already exists (case-insensitive)
-    console.log("[Auth Utils] Checking for existing user...");
     const existingUsers = await sql`
       SELECT id FROM "user"
       WHERE LOWER(email) = LOWER(${normalizedEmail})
     `;
 
     if (existingUsers.length > 0) {
-      console.log("[Auth Utils] User already exists:", normalizedEmail);
       throw new Error("User with this email already exists");
     }
 
     // Create user record
-    console.log("[Auth Utils] Creating user record...");
     const userId = crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -141,10 +136,8 @@ export async function createUserWithPassword(
     }
 
     const user = userResult[0];
-    console.log("[Auth Utils] User record created:", user.id);
 
     // Create account with password
-    console.log("[Auth Utils] Creating password account...");
     const accountId = crypto.randomUUID();
     const hashedPassword = hashPassword(password);
 
@@ -168,8 +161,6 @@ export async function createUserWithPassword(
         ${now}
       )
     `;
-
-    console.log("[Auth Utils] Password account created");
 
     return {
       success: true,
@@ -203,7 +194,6 @@ export async function createUserWithPassword(
  */
 export async function createSession(userId: string) {
   try {
-    console.log("[Auth Utils] Creating session for user:", userId);
     const sessionToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
@@ -218,8 +208,6 @@ export async function createSession(userId: string) {
         NOW()
       )
     `;
-
-    console.log("[Auth Utils] Session created successfully");
 
     return {
       success: true,
@@ -250,7 +238,6 @@ export async function createSession(userId: string) {
  */
 export async function getSessionUserFromRequest() {
   try {
-    console.log("[Auth Utils] Getting session user from Better Auth...");
 
     // Get session token from Better Auth cookie
     const cookieStore = await cookies();
@@ -260,28 +247,15 @@ export async function getSessionUserFromRequest() {
       cookieStore.get("auth.session")?.value;
 
     if (!sessionToken) {
-      console.log("[Auth Utils] No session token found in cookies");
       return null;
     }
-
-    // TEMPORARY LOGGING: Log raw cookie value
-    console.log("[TEMP_LOG_RAW_COOKIE]", sessionToken);
 
     // CRITICAL FIX: Better Auth cookie format is "sessionId.signature"
     // Extract ONLY the sessionId part (before the dot)
     let extractedToken = sessionToken;
     if (sessionToken.includes(".")) {
       extractedToken = sessionToken.split(".")[0];
-      console.log("[Auth Utils] Extracted token from signed cookie");
     }
-
-    // TEMPORARY LOGGING: Log extracted token
-    console.log("[TEMP_LOG_EXTRACTED_ID]", extractedToken);
-    
-    // TEMPORARY LOGGING: Log the exact lookup key
-    console.log("[TEMP_LOG_LOOKUP_KEY]", extractedToken);
-
-    console.log("[Auth Utils] Looking up session with token:", extractedToken);
 
     // Better Auth stores the cookie token value in the 'token' field (NOT 'id')
     const sessions = await sql`
@@ -291,16 +265,11 @@ export async function getSessionUserFromRequest() {
       AND "expiresAt" > NOW()
     `;
 
-    // TEMPORARY LOGGING: Log session lookup row count
-    console.log("[TEMP_LOG_SESSION_ROW_COUNT]", sessions.length);
-
     if (sessions.length === 0) {
-      console.log("[Auth Utils] Session not found or expired");
       return null;
     }
 
     const userId = sessions[0].userId;
-    console.log("[Auth Utils] User ID from session:", userId);
 
     // Fetch complete user data
     const userData = await sql`
@@ -321,13 +290,10 @@ export async function getSessionUserFromRequest() {
     `;
 
     if (userData.length === 0) {
-      console.log("[Auth Utils] User not found for ID:", userId);
       return null;
     }
 
     const user = userData[0];
-    console.log("[Auth Utils] Session user found:", user.email);
-
     return user;
   } catch (error: any) {
     const errorMsg = error?.message || "Failed to get session user";
