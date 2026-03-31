@@ -354,6 +354,23 @@ export default function ManagerDashboard() {
           {/* Team Attendance Widget */}
           <TeamAttendanceWidget />
 
+          {/* Attendance Report Button */}
+          <section>
+            <button 
+              onClick={() => router.push('/manager/attendance/report')}
+              className="w-full bg-gradient-to-r from-cyan-500/5 to-cyan-600/5 rounded-[24px] p-5 shadow-[0_4px_16px_rgba(34,211,238,0.08)] border border-cyan-200/40 flex items-center gap-4 active:scale-95 transition-all hover:shadow-[0_6px_20px_rgba(34,211,238,0.12)] group"
+            >
+              <div className="w-12 h-12 bg-cyan-500/15 rounded-[16px] flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+                <i className="ph-fill ph-calendar-blank text-[24px] text-cyan-600"></i>
+              </div>
+              <div className="flex-1 text-left">
+                <h3 className="text-base font-black text-slate-900">Attendance Report</h3>
+                <p className="text-xs font-medium text-slate-600 mt-1">View and export attendance records</p>
+              </div>
+              <i className="ph-bold ph-caret-right text-lg text-slate-400 group-hover:text-slate-500 transition-colors"></i>
+            </button>
+          </section>
+
           {/* Critical Alerts Section */}
           <section className="space-y-4">
             <h2 className="text-xs font-black text-slate-900 uppercase tracking-[0.15em] px-1 pt-2">Critical Alerts</h2>

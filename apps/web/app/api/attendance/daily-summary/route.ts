@@ -2,6 +2,12 @@ import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 
+/**
+ * GET /api/attendance/daily-summary
+ * Fetch daily attendance summary for an engineer within a date range.
+ * Legacy endpoint - kept for backward compatibility.
+ * Use /api/attendance/report instead for new code.
+ */
 export async function GET(request: Request) {
   try {
     const user = await getSessionUserFromRequest();
@@ -19,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     const businessId = user.business_id;
-    const managerId = user.role === "super_admin" ? undefined : user.id;
+    const managerId = user.role === "super_admin" ? null : user.id;
 
     const { searchParams } = new URL(request.url);
     const engineer_id = searchParams.get("engineer_id");
@@ -33,8 +39,9 @@ export async function GET(request: Request) {
       );
     }
 
-    let query = `
-      SELECT 
+    // Fetch records
+    const records = await sql`
+      SELECT
         attendance_date,
         engineer_user_id,
         check_in_time,
@@ -44,21 +51,12 @@ export async function GET(request: Request) {
         missed_checkout,
         status
       FROM attendance
-      WHERE business_id = $1
-        AND engineer_user_id = $2
-        AND attendance_date >= $3
-        AND attendance_date <= $4
+      WHERE business_id = ${businessId}
+        AND engineer_user_id = ${engineer_id}
+        AND attendance_date >= ${from_date}::date
+        AND attendance_date <= ${to_date}::date
       ORDER BY attendance_date DESC
     `;
-
-    const params: any[] = [businessId, engineer_id, from_date, to_date];
-
-    if (managerId) {
-      query += ` AND manager_user_id = $5`;
-      params.push(managerId);
-    }
-
-    const records = await sql.raw(query, params);
 
     // Calculate summary stats
     const summary = {
@@ -79,16 +77,14 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      records: records,
-      summary: summary,
+      records,
+      summary,
     });
   } catch (error) {
-    console.error("[ATTENDANCE_DAILY_SUMMARY_API]", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("[ATTENDANCE_DAILY_SUMMARY_API]", errorMessage);
     return NextResponse.json(
-      {
-        error: "Failed to fetch daily summary",
-        debug: error instanceof Error ? error.message : String(error),
-      },
+      { error: "Failed to fetch daily summary" },
       { status: 500 }
     );
   }

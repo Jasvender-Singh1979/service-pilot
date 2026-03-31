@@ -73,7 +73,8 @@ export default function AttendanceCard() {
   const getLocation = async (): Promise<GeolocationData | null> => {
     try {
       setLocationLoading(true);
-      
+
+      // Try native geolocation first
       if (Capacitor.isNativePlatform()) {
         try {
           const { Geolocation } = await import('@capacitor/geolocation');
@@ -88,10 +89,10 @@ export default function AttendanceCard() {
             accuracy: result.coords.accuracy || 0,
           };
         } catch (e) {
-          console.warn('Native geolocation failed, trying web API', e);
+          console.warn('Native geolocation failed:', e);
         }
       }
-      
+
       // Web fallback using browser Geolocation API
       return new Promise((resolve) => {
         if (typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -103,10 +104,9 @@ export default function AttendanceCard() {
                 accuracy: position.coords.accuracy || 0,
               });
             },
-            () => {
-              // If geolocation fails, continue without location
-              console.warn('Geolocation not available');
-              resolve(null);
+            (error) => {
+              console.warn('Geolocation error:', error.message);
+              resolve(null); // Continue without location
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           );

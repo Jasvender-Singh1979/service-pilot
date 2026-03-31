@@ -297,11 +297,11 @@ function AttendanceDashboardContent() {
               )}
 
               <Link
-                href={`/manager/attendance/history?engineer_id=${selectedEngineer.id}`}
+                href={`/manager/attendance/report?engineer_id=${selectedEngineer.id}`}
                 onClick={() => setShowDetails(false)}
                 className="w-full py-3 px-4 bg-blue-500 text-white rounded-[14px] font-bold text-sm text-center hover:bg-blue-600 transition-all active:scale-95"
               >
-                View Full History
+                View Full Report
               </Link>
             </div>
           </div>
