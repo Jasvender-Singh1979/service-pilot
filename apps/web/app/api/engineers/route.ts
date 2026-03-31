@@ -68,12 +68,26 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
+  console.log('[API /engineers POST] ========== REQUEST STARTED ==========');
+  
   try {
+    console.log('[API /engineers POST] [STEP 1] Parsing request body...');
     const body = await request.json();
     const { name, email, mobileNumber, password, designation, managerEmail } = body;
 
+    console.log('[API /engineers POST] [STEP 1] Request body received:', { 
+      name, 
+      email, 
+      mobileNumber,
+      passwordLength: password?.length || 0,
+      designation,
+      managerEmail
+    });
+
     // Validation
     if (!name || !email || !mobileNumber || !password || !managerEmail) {
+      console.log('[API /engineers POST] [ERROR] Missing required fields');
       return NextResponse.json(
         { error: 'Name, email, mobile number, password, and manager email are required' },
         { status: 400 }
@@ -81,30 +95,36 @@ export async function POST(request: Request) {
     }
 
     if (password.length < 8) {
+      console.log('[API /engineers POST] [ERROR] Password too short:', password.length);
       return NextResponse.json(
         { error: 'Password must be at least 8 characters' },
         { status: 400 }
       );
     }
 
+    console.log('[API /engineers POST] [STEP 2] Checking for existing email...');
     // Check if email already exists
     const existingUser = await sql`
       SELECT id FROM "user" WHERE LOWER(email) = LOWER(${email})
     `;
 
     if (existingUser.length > 0) {
+      console.log('[API /engineers POST] [ERROR] Email already exists:', email);
       return NextResponse.json(
         { error: 'Email already exists' },
         { status: 400 }
       );
     }
+    console.log('[API /engineers POST] [STEP 2] ✅ Email is unique');
 
+    console.log('[API /engineers POST] [STEP 3] Getting manager details...');
     // Get manager details
     const managerResult = await sql`
       SELECT id, business_id FROM "user" WHERE email = ${managerEmail} AND role = 'manager'
     `;
 
     if (managerResult.length === 0) {
+      console.log('[API /engineers POST] [ERROR] Manager not found:', managerEmail);
       return NextResponse.json(
         { error: 'Manager not found' },
         { status: 404 }
@@ -112,29 +132,64 @@ export async function POST(request: Request) {
     }
 
     const manager = managerResult[0];
+    console.log('[API /engineers POST] [STEP 3] ✅ Manager found:', { id: manager.id, business_id: manager.business_id });
 
     // Create engineer using Better Auth's server-side API
-    console.log('[Engineers API] Creating engineer via Better Auth...')
-    const createResult = await auth.api.signUpEmail({
-      email: email.toLowerCase(),
-      password,
-      name,
-    });
+    console.log('[API /engineers POST] [STEP 4] Calling auth.api.signUpEmail() with correct API format...');
+    
+    let createResult;
+    try {
+      // Better Auth API signature requires 'body' parameter and optionally 'headers'
+      createResult = await auth.api.signUpEmail({
+        body: {
+          email: email.toLowerCase(),
+          password: password,
+          name: name,
+        },
+        headers: new Headers(request.headers),
+      });
+      console.log('[API /engineers POST] [STEP 4] auth.api.signUpEmail() returned:', { 
+        hasData: !!createResult.data,
+        hasError: !!createResult.error,
+        hasUser: !!createResult.data?.user
+      });
+    } catch (authApiError: any) {
+      console.error('[API /engineers POST] [STEP 4] EXCEPTION during auth.api.signUpEmail():', {
+        message: authApiError?.message,
+        code: authApiError?.code,
+        stack: authApiError?.stack,
+      });
+      throw authApiError;
+    }
 
     if (!createResult.data?.user) {
-      console.error('[Engineers API] Failed to create engineer via Better Auth:', createResult.error);
+      console.error('[API /engineers POST] [ERROR] Better Auth failed to create user:', {
+        error: createResult.error,
+        data: createResult.data,
+      });
+      const errorMsg = createResult.error?.message || 'Failed to create engineer account';
+      
+      // Return detailed error in development
+      const isDev = process.env.NODE_ENV === 'development';
       return NextResponse.json(
-        { error: createResult.error?.message || 'Failed to create engineer account' },
+        { 
+          error: errorMsg,
+          details: isDev ? { betterAuthError: createResult.error } : undefined
+        },
         { status: 400 }
       );
     }
 
     const userId = createResult.data.user.id;
-    console.log('[Engineers API] Engineer created via Better Auth, now adding engineer metadata...');
+    console.log('[API /engineers POST] [STEP 4] ✅ Engineer created via Better Auth:', { 
+      userId, 
+      email: createResult.data.user.email 
+    });
 
+    console.log('[API /engineers POST] [STEP 5] Updating user with engineer-specific fields...');
     // Update user with engineer-specific fields
     const now = new Date().toISOString();
-    await sql`
+    const updateResult = await sql`
       UPDATE "user"
       SET 
         role = 'engineer',
@@ -145,22 +200,46 @@ export async function POST(request: Request) {
         first_login_password_change_required = true,
         "updatedAt" = ${now}
       WHERE id = ${userId}
+      RETURNING id, name, email, mobile_number, designation, is_active, "createdAt"
     `;
 
-    console.log('[Engineers API] Engineer created:', userId);
+    if (updateResult.length === 0) {
+      console.error('[API /engineers POST] [ERROR] DB update returned no rows');
+      throw new Error("Failed to update engineer with fields - user may not exist in database");
+    }
 
-    // Return the created engineer
-    const result = await sql`
-      SELECT id, name, email, mobile_number, designation, is_active, "createdAt"
-      FROM "user"
-      WHERE id = ${userId}
-    `;
+    const createdEngineer = updateResult[0];
+    console.log('[API /engineers POST] [STEP 5] ✅ Engineer updated with fields:', { 
+      id: createdEngineer.id, 
+      role: 'engineer',
+      business_id: manager.business_id
+    });
 
-    return NextResponse.json(result[0], { status: 201 });
+    const duration = Date.now() - startTime;
+    console.log('[API /engineers POST] ========== SUCCESS (${duration}ms) ==========');
+
+    return NextResponse.json(createdEngineer, { status: 201 });
   } catch (error: any) {
-    console.error('Error creating engineer:', error);
+    const duration = Date.now() - startTime;
+    console.error('[API /engineers POST] ========== FAILED (${duration}ms) ==========');
+    console.error('[API /engineers POST] [EXCEPTION] Error details:', {
+      message: error?.message,
+      code: error?.code,
+      constraint: error?.constraint,
+      stack: error?.stack,
+      name: error?.name,
+    });
+
+    // Return detailed error in development
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: error.message || 'Failed to create engineer' },
+      { 
+        error: error?.message || 'Failed to create engineer',
+        details: isDev ? {
+          code: error?.code,
+          constraint: error?.constraint,
+        } : undefined
+      },
       { status: 500 }
     );
   }

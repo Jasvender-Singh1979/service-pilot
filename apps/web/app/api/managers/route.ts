@@ -41,30 +41,47 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
+  console.log('[API /managers POST] ========== REQUEST STARTED ==========');
+  
   try {
-    console.log('[API /managers POST] Request received');
-    
+    console.log('[API /managers POST] [STEP 1] Validating session...');
     const user = await getSessionUserFromRequest();
 
     if (!user) {
-      console.log('[API /managers POST] REJECTING: No session user found');
+      console.log('[API /managers POST] [ERROR] No session user found');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    console.log('[API /managers POST] [STEP 1] Session user found:', { id: user.id, email: user.email, role: user.role });
+
     // Only super admin can create managers
     if (user.role !== "super_admin") {
-      console.log('[API /managers POST] REJECTING: User role is', user.role, 'not super_admin');
+      console.log('[API /managers POST] [ERROR] User role is', user.role, '- not super_admin');
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    console.log('[API /managers POST] User authorized as super_admin');
+    console.log('[API /managers POST] [STEP 1] ✅ User authorized as super_admin');
 
     const businessId = user.business_id;
+    console.log('[API /managers POST] [STEP 2] businessId:', businessId);
 
+    console.log('[API /managers POST] [STEP 2] Parsing request body...');
     const body = await request.json();
+    console.log('[API /managers POST] [STEP 2] Request body received:', { 
+      name: body.name, 
+      email: body.email, 
+      passwordLength: body.password?.length || 0 
+    });
+
     const { name, email, password } = body;
 
     // Validation
     if (!name || !email || !password) {
+      console.log('[API /managers POST] [ERROR] Missing required fields:', { 
+        hasName: !!name, 
+        hasEmail: !!email, 
+        hasPassword: !!password 
+      });
       return NextResponse.json(
         { error: "Name, email, and password are required" },
         { status: 400 }
@@ -72,47 +89,91 @@ export async function POST(request: Request) {
     }
 
     if (password.length < 8) {
+      console.log('[API /managers POST] [ERROR] Password too short:', password.length);
       return NextResponse.json(
         { error: "Password must be at least 8 characters" },
         { status: 400 }
       );
     }
 
+    console.log('[API /managers POST] [STEP 3] Checking for existing email...');
     // Check if email already exists (case-insensitive)
     const existingUser = await sql`
       SELECT id FROM "user" WHERE LOWER(email) = LOWER(${email})
     `;
 
     if (existingUser.length > 0) {
+      console.log('[API /managers POST] [ERROR] Email already exists:', email);
       return NextResponse.json(
         { error: "Email already exists" },
         { status: 400 }
       );
     }
+    console.log('[API /managers POST] [STEP 3] ✅ Email is unique:', email);
 
-    // Create manager using createUserWithPassword utility which uses Better Auth
-    console.log('[API /managers POST] Creating manager via Better Auth...');
+    // Create manager using Better Auth
+    console.log('[API /managers POST] [STEP 4] Calling auth.api.signUpEmail() with correct API format...');
+    console.log('[API /managers POST] [DEBUG] Request object type:', typeof request);
+    console.log('[API /managers POST] [DEBUG] auth object available:', !!auth);
+    console.log('[API /managers POST] [DEBUG] auth.api available:', !!auth.api);
+    console.log('[API /managers POST] [DEBUG] auth.api.signUpEmail available:', typeof auth.api.signUpEmail);
     
-    const createResult = await auth.api.signUpEmail({
-      email: email.toLowerCase(),
-      password,
-      name,
-    });
+    let createResult;
+    try {
+      // Better Auth API signature requires 'body' parameter and optionally 'headers'
+      // See: https://better-auth.com/docs/concepts/api
+      createResult = await auth.api.signUpEmail({
+        body: {
+          email: email.toLowerCase(),
+          password: password,
+          name: name,
+        },
+        headers: new Headers(request.headers),
+      });
+      console.log('[API /managers POST] [STEP 4] auth.api.signUpEmail() returned:', { 
+        hasData: !!createResult.data,
+        hasError: !!createResult.error,
+        hasUser: !!createResult.data?.user
+      });
+    } catch (authApiError: any) {
+      console.error('[API /managers POST] [STEP 4] EXCEPTION during auth.api.signUpEmail():', {
+        message: authApiError?.message,
+        code: authApiError?.code,
+        stack: authApiError?.stack,
+        fullError: JSON.stringify(authApiError, null, 2),
+      });
+      throw authApiError;
+    }
 
     if (!createResult.data?.user) {
-      console.error('[API /managers POST] Failed to create user via Better Auth:', createResult.error);
+      console.error('[API /managers POST] [ERROR] Better Auth failed to create user:', {
+        error: createResult.error,
+        data: createResult.data,
+      });
+      const errorMsg = createResult.error?.message || "Failed to create manager account";
+      console.log('[API /managers POST] [ERROR] Returning error response:', errorMsg);
+      
+      // Return detailed error in development
+      const isDev = process.env.NODE_ENV === 'development';
       return NextResponse.json(
-        { error: createResult.error?.message || "Failed to create manager account" },
+        { 
+          error: errorMsg,
+          details: isDev ? { betterAuthError: createResult.error } : undefined
+        },
         { status: 400 }
       );
     }
 
     const userId = createResult.data.user.id;
-    console.log('[API /managers POST] Manager created via Better Auth, now adding manager metadata...');
+    console.log('[API /managers POST] [STEP 4] ✅ Manager created via Better Auth:', { 
+      userId, 
+      email: createResult.data.user.email 
+    });
 
+    console.log('[API /managers POST] [STEP 5] Updating user with manager-specific fields...');
     // Update user with manager-specific fields
     const now = new Date().toISOString();
-    await sql`
+    const updateQueryResult = await sql`
       UPDATE "user"
       SET 
         role = 'manager',
@@ -120,22 +181,53 @@ export async function POST(request: Request) {
         first_login_password_change_required = true,
         "updatedAt" = ${now}
       WHERE id = ${userId}
+      RETURNING id, name, email, role, business_id, "createdAt"
     `;
 
-    console.log('[API /managers POST] SUCCESS: Manager created with id:', userId);
+    if (updateQueryResult.length === 0) {
+      console.error('[API /managers POST] [ERROR] DB update returned no rows. User may not have been created by Better Auth.');
+      // Check if user actually exists in DB
+      const checkUser = await sql`SELECT id FROM "user" WHERE id = ${userId}`;
+      console.log('[API /managers POST] [DEBUG] User exists in DB:', checkUser.length > 0);
+      
+      throw new Error("Failed to update user with manager fields - user may not exist in database");
+    }
 
-    // Return the created user
-    const createdUser = await sql`
-      SELECT id, name, email, role, business_id, "createdAt"
-      FROM "user"
-      WHERE id = ${userId}
-    `;
+    const updatedUser = updateQueryResult[0];
+    console.log('[API /managers POST] [STEP 5] ✅ User updated with manager fields:', { 
+      id: updatedUser.id, 
+      role: updatedUser.role, 
+      business_id: updatedUser.business_id 
+    });
 
-    return NextResponse.json(createdUser[0], { status: 201 });
-  } catch (error) {
-    console.error("Error creating manager:", error);
+    const duration = Date.now() - startTime;
+    console.log('[API /managers POST] ========== SUCCESS (${duration}ms) ==========');
+
+    return NextResponse.json(updatedUser, { status: 201 });
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error('[API /managers POST] ========== FAILED (${duration}ms) ==========');
+    console.error('[API /managers POST] [EXCEPTION] Error details:', {
+      message: error?.message,
+      code: error?.code,
+      constraint: error?.constraint,
+      stack: error?.stack,
+      name: error?.name,
+      cause: error?.cause,
+      fullError: JSON.stringify(error, null, 2),
+    });
+
+    // Return detailed error in development
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: "Failed to create manager" },
+      { 
+        error: error?.message || "Failed to create manager",
+        details: isDev ? {
+          code: error?.code,
+          constraint: error?.constraint,
+          name: error?.name,
+        } : undefined
+      },
       { status: 500 }
     );
   }
