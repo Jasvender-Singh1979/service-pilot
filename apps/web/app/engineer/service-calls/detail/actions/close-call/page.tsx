@@ -32,7 +32,6 @@ interface QuotationRow {
 
 interface CloseFormData {
   closure_note: string;
-  closure_image_url: string | null;
   service_charge_amount: string;
   service_discount_amount: string;
   quotation_rows: QuotationRow[];
@@ -51,7 +50,6 @@ function CloseCallContent() {
 
   const [formData, setFormData] = useState<CloseFormData>({
     closure_note: '',
-    closure_image_url: null,
     service_charge_amount: '',
     service_discount_amount: '',
     quotation_rows: [],
@@ -62,20 +60,12 @@ function CloseCallContent() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const handleInputChange = (field: keyof CloseFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleImageSelect = (file: File) => {
-    setImageFile(file);
-  };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setFormData(prev => ({ ...prev, closure_image_url: null }));
-  };
 
   const addQuotationRow = () => {
     const newRow: QuotationRow = {
@@ -222,22 +212,6 @@ function CloseCallContent() {
     setError('');
 
     try {
-      // Upload image if selected
-      let imageUrl = null;
-      if (imageFile) {
-        const uploadFormData = new FormData();
-        uploadFormData.append('file', imageFile);
-        const uploadRes = await fetch(`/api/upload`, {
-          method: 'POST',
-          body: uploadFormData,
-        });
-        if (!uploadRes.ok) {
-          throw new Error('Failed to upload image');
-        }
-        const uploadData = await uploadRes.json();
-        imageUrl = uploadData.url;
-      }
-
       // Submit closure
       const response = await fetch(
         `/api/engineers/service-calls/${callId}/close`,
@@ -247,7 +221,6 @@ function CloseCallContent() {
           credentials: 'include',
           body: JSON.stringify({
             closure_note: formData.closure_note,
-            closure_image_url: imageUrl,
             service_charge_amount: parseFloat(formData.service_charge_amount),
             service_discount_amount: parseFloat(formData.service_discount_amount) || 0,
             material_discount_amount: parseFloat(formData.material_discount_amount) || 0,
@@ -336,41 +309,7 @@ function CloseCallContent() {
           </p>
         </div>
 
-        {/* Section B: Optional Picture */}
-        <div className="bg-white rounded-lg p-4 mb-4 border">
-          <h2 className="font-bold text-gray-900 mb-3">Upload Picture (Optional)</h2>
-          {imageFile ? (
-            <div className="relative bg-gray-100 rounded-lg overflow-hidden">
-              <img
-                src={URL.createObjectURL(imageFile)}
-                alt="Selected"
-                className="w-full h-auto"
-              />
-              <button
-                type="button"
-                onClick={handleRemoveImage}
-                disabled={loading}
-                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 disabled:opacity-50"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <label className="block border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
-                disabled={loading}
-                className="hidden"
-              />
-              <div className="text-gray-600">
-                <div className="text-3xl mb-2">📷</div>
-                <p className="text-sm">Click to select an image</p>
-              </div>
-            </label>
-          )}
-        </div>
+
 
         {/* Section C: Service Charges */}
         <div className="bg-white rounded-lg p-4 mb-4 border">

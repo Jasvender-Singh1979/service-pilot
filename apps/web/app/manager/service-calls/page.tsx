@@ -583,12 +583,7 @@ function ServiceCallsContent() {
                     <p className="text-sm text-green-900 whitespace-pre-wrap">{selectedCall.closure_note}</p>
                   </div>
                 )}
-                {selectedCall.closure_image_url && (
-                  <div>
-                    <p className="text-[12px] font-bold text-green-700 uppercase tracking-wider mb-2">CLOSURE IMAGE</p>
-                    <img src={selectedCall.closure_image_url} alt="Closure" className="w-full rounded-lg" />
-                  </div>
-                )}
+
               </div>
             </div>
           )}

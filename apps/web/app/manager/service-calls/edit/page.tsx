@@ -102,8 +102,6 @@ function EditServiceCallContent() {
     engineers: [],
   });
   const [error, setError] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
 
   const [form, setForm] = useState({
     customer_name: '',
@@ -171,9 +169,7 @@ function EditServiceCallContent() {
           assigned_engineer_user_id: callData.assigned_engineer_user_id || '',
         });
 
-        if (callData.service_image_url) {
-          setImagePreview(callData.service_image_url);
-        }
+
 
         setLoading(false);
       } catch (err) {
@@ -223,17 +219,7 @@ function EditServiceCallContent() {
     });
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -278,56 +264,6 @@ function EditServiceCallContent() {
         return;
       }
 
-      // Handle image upload if new file is provided
-      let service_image_url = imagePreview;
-      if (imageFile) {
-        try {
-          const uploadFormData = new FormData();
-          uploadFormData.append('file', imageFile);
-
-          const uploadResponse = await fetch(
-            `/api/upload`,
-            {
-              method: 'POST',
-              body: uploadFormData,
-            }
-          );
-
-          if (!uploadResponse.ok) {
-            const uploadErrorData = await uploadResponse.json();
-            // If upload is not configured, allow gracefully skipping image
-            if (uploadErrorData.error?.includes('not configured')) {
-              console.warn('Image upload not configured, continuing without new image');
-              service_image_url = imagePreview;
-            } else {
-              throw new Error(
-                uploadErrorData.error || `Upload failed with status ${uploadResponse.status}`
-              );
-            }
-          } else {
-            const uploadData = await uploadResponse.json();
-            if (!uploadData.url) {
-              throw new Error('No URL returned from upload service');
-            }
-            service_image_url = uploadData.url;
-          }
-        } catch (uploadErr) {
-          console.error('Image upload error:', uploadErr);
-          // Allow continuing without image for optional field
-          if (uploadErr instanceof Error && uploadErr.message.includes('not configured')) {
-            console.warn('Image upload not configured, continuing without image');
-          } else {
-            setError(
-              uploadErr instanceof Error
-                ? `Image upload failed: ${uploadErr.message}`
-                : 'Image upload failed'
-            );
-            setSubmitting(false);
-            return;
-          }
-        }
-      }
-
       // Update service call
       const response = await fetch(
         `/api/service-calls/${callId}`,
@@ -336,7 +272,6 @@ function EditServiceCallContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...form,
-            service_image_url,
             custom_amount: form.custom_amount ? parseFloat(form.custom_amount) : null,
           }),
         }
@@ -583,36 +518,7 @@ function EditServiceCallContent() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Upload Image (Optional)
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="w-full"
-              />
-              {imagePreview && (
-                <div className="mt-3 relative w-32 h-32 rounded-lg overflow-hidden border border-slate-300">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageFile(null);
-                      setImagePreview('');
-                    }}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold hover:bg-red-600"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </div>
+
           </div>
         </div>
 

@@ -509,12 +509,7 @@ function ServiceCallDetailContent() {
       </div>
 
       <div className="flex-1 p-4 pb-24">
-        {/* Service Image */}
-        {call.service_image_url && (
-          <div className="mb-4 rounded-lg overflow-hidden bg-gray-200">
-            <img src={call.service_image_url} alt="Service" className="w-full h-auto" />
-          </div>
-        )}
+
 
         {/* Status and Priority */}
         <div className="bg-white rounded-lg p-4 mb-4 border space-y-2">
@@ -747,12 +742,7 @@ function ServiceCallDetailContent() {
                   <div className="text-green-900">{call.closure_note}</div>
                 </div>
               )}
-              {call.closure_image_url && (
-                <div>
-                  <div className="text-xs text-green-700 font-semibold mb-1">CLOSURE IMAGE</div>
-                  <img src={call.closure_image_url} alt="Closure" className="w-full rounded-lg mt-2" />
-                </div>
-              )}
+
             </div>
           </div>
         )}
