@@ -138,7 +138,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
+    console.log('[SERVICE_CALL_CREATE] ========== REQUEST START ==========');
+    
     const user = await getSessionUserFromRequest();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -152,6 +155,7 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log('[SERVICE_CALL_CREATE] [STEP 1] Parsing request body...');
     const {
       customer_name,
       customer_address,
@@ -173,6 +177,7 @@ export async function POST(request: Request) {
       selected_whatsapp_template = null,
       assigned_engineer_user_id,
     } = await request.json();
+    console.log('[SERVICE_CALL_CREATE] [STEP 1] ✅ Body parsed, service_image_url:', service_image_url || 'null');
 
     // Validate required fields
     if (
@@ -278,7 +283,7 @@ export async function POST(request: Request) {
     const currentYear = parseInt(istYear);
     const currentMonth = monthNum;
 
-    console.log('[SERVICE_CALL_CREATE] Call ID Generation - IST Details:', {
+    console.log('[SERVICE_CALL_CREATE] [STEP 2] Call ID Generation - IST Details:', {
       todayIST,
       year,
       month,
@@ -289,13 +294,18 @@ export async function POST(request: Request) {
 
     // Get the MAX monthly_sequence_number for this manager in the current IST month
     // CRITICAL: Use IST-converted month/year, not UTC
+    console.log('[SERVICE_CALL_CREATE] [STEP 3] Querying max monthly_sequence_number...');
+    console.log('[SERVICE_CALL_CREATE] [STEP 3] Date range: ', `${istYear}-${istMonth}-01 to ${istYear}-${istMonth + 1}-01`);
+    
     const maxSequenceResult = await sql`
       SELECT COALESCE(MAX(monthly_sequence_number), 0) as max_sequence
       FROM service_call
       WHERE manager_user_id = ${user.id}
-      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${istYear}-${istMonth}-01
-      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date < (${istYear}-${istMonth}-01::date + interval '1 month')
+      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${`${istYear}-${istMonth}-01`}::date
+      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date < ${`${istYear}-${String(currentMonth + 1).padStart(2, '0')}-01`}::date
     `;
+    
+    console.log('[SERVICE_CALL_CREATE] [STEP 3] ✅ Sequence query succeeded, max_sequence:', maxSequenceResult[0]?.max_sequence);
 
     const maxSequenceNumber = maxSequenceResult[0]?.max_sequence || 0;
     // Integer arithmetic: next = max + 1
@@ -303,6 +313,9 @@ export async function POST(request: Request) {
     // Format as zero-padded 2-digit string for display
     const sequenceStr = String(nextSequenceNumber).padStart(2, '0');
     const call_id = `${managerInitials}-${day}${year}-${month}-${sequenceStr}`;
+    
+    console.log('[SERVICE_CALL_CREATE] [STEP 4] Generated call_id:', call_id);
+    console.log('[SERVICE_CALL_CREATE] [STEP 5] Inserting service call...');
 
     // Create service call
     const result = await sql`
@@ -363,9 +376,13 @@ export async function POST(request: Request) {
       )
       RETURNING *
     `;
+    
+    console.log('[SERVICE_CALL_CREATE] [STEP 5] ✅ Service call inserted, id:', result[0]?.id);
 
     // Create history entry for call creation
     const newCall = result[0];
+    console.log('[SERVICE_CALL_CREATE] [STEP 6] Creating history entry...');
+    
     await sql`
       INSERT INTO service_call_history (
         service_call_id,
@@ -385,11 +402,31 @@ export async function POST(request: Request) {
         NOW()
       )
     `;
+    
+    console.log('[SERVICE_CALL_CREATE] [STEP 6] ✅ History entry created');
 
+    const duration = Date.now() - startTime;
+    console.log('[SERVICE_CALL_CREATE] ========== SUCCESS (${duration}ms) ==========');
+    
     return NextResponse.json(newCall, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Error creating service call:", errorMessage, error);
+    
+    console.error('[SERVICE_CALL_CREATE] ========== ERROR (${duration}ms) ==========');
+    console.error('[SERVICE_CALL_CREATE] [ERROR] Message:', errorMessage);
+    console.error('[SERVICE_CALL_CREATE] [ERROR] Code:', error?.code);
+    console.error('[SERVICE_CALL_CREATE] [ERROR] Constraint:', error?.constraint);
+    console.error('[SERVICE_CALL_CREATE] [ERROR] Full object:', {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      constraint: error?.constraint,
+      detail: error?.detail,
+      hint: error?.hint,
+      position: error?.position,
+    });
+    
     return NextResponse.json(
       { error: `Failed to create service call: ${errorMessage}` },
       { status: 500 }
