@@ -1,6 +1,7 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
-import { createUserWithPassword, getSessionUserFromRequest } from "@/lib/auth-utils";
+import { getSessionUserFromRequest } from "@/lib/auth-utils";
+import { auth } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
@@ -79,9 +80,16 @@ export async function POST(request: Request) {
       );
     }
 
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters' },
+        { status: 400 }
+      );
+    }
+
     // Check if email already exists
     const existingUser = await sql`
-      SELECT id FROM "user" WHERE email = ${email}
+      SELECT id FROM "user" WHERE LOWER(email) = LOWER(${email})
     `;
 
     if (existingUser.length > 0) {
@@ -105,37 +113,47 @@ export async function POST(request: Request) {
 
     const manager = managerResult[0];
 
-    // Create engineer using the auth utility
-    console.log('[Engineers API] Creating engineer with utility...')
-    const createResult = await createUserWithPassword(
-      email,
+    // Create engineer using Better Auth's server-side API
+    console.log('[Engineers API] Creating engineer via Better Auth...')
+    const createResult = await auth.api.signUpEmail({
+      email: email.toLowerCase(),
       password,
       name,
-      {
-        role: 'engineer',
-        business_id: manager.business_id,
-        manager_user_id: manager.id,
-        mobile_number: mobileNumber,
-        designation: designation || undefined,
-        first_login_password_change_required: true,
-      }
-    );
+    });
 
-    if (!createResult.success || !createResult.user) {
-      console.error('[Engineers API] Failed to create engineer:', createResult.error);
+    if (!createResult.data?.user) {
+      console.error('[Engineers API] Failed to create engineer via Better Auth:', createResult.error);
       return NextResponse.json(
-        { error: createResult.error || 'Failed to create engineer account' },
+        { error: createResult.error?.message || 'Failed to create engineer account' },
         { status: 400 }
       );
     }
 
-    console.log('[Engineers API] Engineer created:', createResult.user.id);
+    const userId = createResult.data.user.id;
+    console.log('[Engineers API] Engineer created via Better Auth, now adding engineer metadata...');
+
+    // Update user with engineer-specific fields
+    const now = new Date().toISOString();
+    await sql`
+      UPDATE "user"
+      SET 
+        role = 'engineer',
+        business_id = ${manager.business_id},
+        manager_user_id = ${manager.id},
+        mobile_number = ${mobileNumber},
+        designation = ${designation || null},
+        first_login_password_change_required = true,
+        "updatedAt" = ${now}
+      WHERE id = ${userId}
+    `;
+
+    console.log('[Engineers API] Engineer created:', userId);
 
     // Return the created engineer
     const result = await sql`
       SELECT id, name, email, mobile_number, designation, is_active, "createdAt"
       FROM "user"
-      WHERE id = ${createResult.user.id}
+      WHERE id = ${userId}
     `;
 
     return NextResponse.json(result[0], { status: 201 });

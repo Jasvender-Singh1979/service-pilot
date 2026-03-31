@@ -2,44 +2,18 @@
  * REUSABLE AUTH UTILITIES
  * 
  * This module provides centralized, reusable authentication functions.
- * It extracts the working logic from sign-up/sign-in flows into utilities
- * that can be used across the entire app.
  * 
+ * IMPORTANT: This uses Better Auth server-side API for user creation.
  * Functions:
- * - createUserWithPassword(): Create a new user with password hash
+ * - createUserWithPassword(): Create a new user with password (via Better Auth)
  * - getSessionUserFromRequest(): Get authenticated user from request
  * - normalizeEmail(): Normalize email to lowercase
  */
 
 import sql from "@/app/api/utils/sql";
+import { auth } from "@/lib/auth";
 import * as crypto from "crypto";
-import { cookies, headers } from "next/headers";
-
-/**
- * Hash password using PBKDF2 with salt (compatible with existing passwords)
- * Format: "salt:hash"
- */
-export function hashPassword(password: string, salt?: string): string {
-  const useSalt = salt || crypto.randomBytes(16).toString("hex");
-  const hash = crypto
-    .pbkdf2Sync(password, useSalt, 100000, 64, "sha256")
-    .toString("hex");
-  return `${useSalt}:${hash}`;
-}
-
-/**
- * Verify password against stored hash
- */
-export function verifyPassword(password: string, storedHash: string): boolean {
-  if (!storedHash || !storedHash.includes(":")) {
-    return false;
-  }
-  const [salt, hash] = storedHash.split(":");
-  const computed = crypto
-    .pbkdf2Sync(password, salt, 100000, 64, "sha256")
-    .toString("hex");
-  return computed === hash;
-}
+import { cookies } from "next/headers";
 
 /**
  * Normalize email to lowercase for consistency
@@ -49,7 +23,10 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
- * Create a new user with password
+ * Create a new user with password using Better Auth's server-side API
+ *
+ * This is the ONLY correct way to create users with passwords in Better Auth.
+ * It ensures passwords are hashed using Better Auth's standard algorithm.
  *
  * @param email - User email (will be normalized to lowercase)
  * @param password - Plain text password
@@ -93,86 +70,75 @@ export async function createUserWithPassword(
       throw new Error("User with this email already exists");
     }
 
-    // Create user record
-    const userId = crypto.randomUUID();
-    const now = new Date().toISOString();
+    console.log('[Auth Utils] Creating user via Better Auth API:', normalizedEmail);
 
-    const userResult = await sql`
-      INSERT INTO "user" (
-        id,
-        email,
-        name,
-        "createdAt",
-        "updatedAt",
-        "emailVerified",
-        is_active,
-        role,
-        business_id,
-        manager_user_id,
-        designation,
-        mobile_number,
-        first_login_password_change_required
-      )
-      VALUES (
-        ${userId},
-        ${normalizedEmail},
-        ${name},
-        ${now},
-        ${now},
-        false,
-        true,
-        ${overrides?.role || "engineer"},
-        ${overrides?.business_id || null},
-        ${overrides?.manager_user_id || null},
-        ${overrides?.designation || null},
-        ${overrides?.mobile_number || null},
-        ${overrides?.first_login_password_change_required ?? false}
-      )
-      RETURNING id, email, name, role, business_id, manager_user_id
-    `;
+    // Use Better Auth's server-side signUpEmail API
+    // This automatically creates both user and account with proper password hashing
+    const result = await auth.api.signUpEmail({
+      email: normalizedEmail,
+      password: password,
+      name: name,
+    });
 
-    if (userResult.length === 0) {
-      throw new Error("Failed to create user - no rows returned");
+    if (!result.data?.user) {
+      console.error('[Auth Utils] Better Auth signUpEmail failed:', result.error);
+      throw new Error(result.error?.message || "Failed to create user via Better Auth");
     }
 
-    const user = userResult[0];
+    const userId = result.data.user.id;
+    console.log('[Auth Utils] Better Auth created user:', userId);
 
-    // Create account with password
-    const accountId = crypto.randomUUID();
-    const hashedPassword = hashPassword(password);
+    // Update user with app-specific fields (role, business_id, etc.)
+    if (overrides && Object.keys(overrides).length > 0) {
+      console.log('[Auth Utils] Updating user with app-specific fields...');
+      const now = new Date().toISOString();
+      
+      const updateResult = await sql`
+        UPDATE "user"
+        SET 
+          role = COALESCE(${overrides.role || null}, role),
+          business_id = COALESCE(${overrides.business_id || null}, business_id),
+          manager_user_id = COALESCE(${overrides.manager_user_id || null}, manager_user_id),
+          designation = COALESCE(${overrides.designation || null}, designation),
+          mobile_number = COALESCE(${overrides.mobile_number || null}, mobile_number),
+          first_login_password_change_required = COALESCE(${overrides.first_login_password_change_required ?? null}, first_login_password_change_required),
+          "updatedAt" = ${now}
+        WHERE id = ${userId}
+        RETURNING id, email, name, role, business_id, manager_user_id
+      `;
 
-    await sql`
-      INSERT INTO account (
-        id,
-        "userId",
-        "accountId",
-        "providerId",
-        password,
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${accountId},
-        ${userId},
-        ${userId},
-        'credential',
-        ${hashedPassword},
-        ${now},
-        ${now}
-      )
-    `;
+      if (updateResult.length === 0) {
+        throw new Error("Failed to update user with app-specific fields");
+      }
 
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        business_id: user.business_id,
-        manager_user_id: user.manager_user_id,
-      },
-    };
+      const user = updateResult[0];
+      console.log('[Auth Utils] User created successfully:', { id: userId, email: normalizedEmail, role: user.role });
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          business_id: user.business_id,
+          manager_user_id: user.manager_user_id,
+        },
+      };
+    } else {
+      // No app-specific overrides, just return the Better Auth result
+      return {
+        success: true,
+        user: {
+          id: result.data.user.id,
+          email: result.data.user.email,
+          name: result.data.user.name,
+          role: "engineer",
+          business_id: null,
+          manager_user_id: null,
+        },
+      };
+    }
   } catch (error: any) {
     const errorMsg = error?.message || "Failed to create user";
     console.error("[Auth Utils] createUserWithPassword error:", {
@@ -189,39 +155,7 @@ export async function createUserWithPassword(
   }
 }
 
-/**
- * Create a session token for a user
- */
-export async function createSession(userId: string) {
-  try {
-    const sessionToken = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-    await sql`
-      INSERT INTO session (id, "userId", token, "expiresAt", "createdAt", "updatedAt")
-      VALUES (
-        ${crypto.randomUUID()},
-        ${userId},
-        ${sessionToken},
-        ${expiresAt.toISOString()},
-        NOW(),
-        NOW()
-      )
-    `;
-
-    return {
-      success: true,
-      sessionToken,
-    };
-  } catch (error: any) {
-    const errorMsg = error?.message || "Failed to create session";
-    console.error("[Auth Utils] createSession error:", errorMsg);
-    return {
-      success: false,
-      error: errorMsg,
-    };
-  }
-}
 
 /**
  * Get authenticated user from request by reading session cookie

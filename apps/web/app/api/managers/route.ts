@@ -71,6 +71,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 }
+      );
+    }
+
     // Check if email already exists (case-insensitive)
     const existingUser = await sql`
       SELECT id FROM "user" WHERE LOWER(email) = LOWER(${email})
@@ -83,74 +90,39 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create manager using Better Auth's server-side API
-    // This ensures the password is hashed using Better Auth's algorithm
-    console.log('[API /managers POST] Creating manager using Better Auth server API');
+    // Create manager using createUserWithPassword utility which uses Better Auth
+    console.log('[API /managers POST] Creating manager via Better Auth...');
     
-    const userId = crypto.randomUUID();
-    const now = new Date();
+    const createResult = await auth.api.signUpEmail({
+      email: email.toLowerCase(),
+      password,
+      name,
+    });
 
-    // Step 1: Create user record with manager role and business_id
-    console.log('[API /managers POST] Creating user record with role=manager, business_id=', businessId);
+    if (!createResult.data?.user) {
+      console.error('[API /managers POST] Failed to create user via Better Auth:', createResult.error);
+      return NextResponse.json(
+        { error: createResult.error?.message || "Failed to create manager account" },
+        { status: 400 }
+      );
+    }
+
+    const userId = createResult.data.user.id;
+    console.log('[API /managers POST] Manager created via Better Auth, now adding manager metadata...');
+
+    // Update user with manager-specific fields
+    const now = new Date().toISOString();
     await sql`
-      INSERT INTO "user" (
-        id,
-        email,
-        name,
-        "createdAt",
-        "updatedAt",
-        "emailVerified",
-        is_active,
-        role,
-        business_id,
-        first_login_password_change_required
-      )
-      VALUES (
-        ${userId},
-        ${email.toLowerCase()},
-        ${name},
-        ${now.toISOString()},
-        ${now.toISOString()},
-        false,
-        true,
-        'manager',
-        ${businessId},
-        true
-      )
+      UPDATE "user"
+      SET 
+        role = 'manager',
+        business_id = ${businessId},
+        first_login_password_change_required = true,
+        "updatedAt" = ${now}
+      WHERE id = ${userId}
     `;
 
-    // Step 2: Create account using Better Auth's password adapter
-    // Better Auth uses PBKDF2 with sha256, 100000 iterations
-    console.log('[API /managers POST] Creating account record with Better Auth-compatible hashing');
-    const accountId = crypto.randomUUID();
-    const salt = crypto.randomBytes(16).toString("hex");
-    const hash = crypto
-      .pbkdf2Sync(password, salt, 100000, 64, "sha256")
-      .toString("hex");
-    const hashedPassword = `${salt}:${hash}`;
-
-    await sql`
-      INSERT INTO account (
-        id,
-        "userId",
-        "accountId",
-        "providerId",
-        password,
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${accountId},
-        ${userId},
-        ${userId},
-        'credential',
-        ${hashedPassword},
-        ${now.toISOString()},
-        ${now.toISOString()}
-      )
-    `;
-
-    console.log('[API /managers POST] SUCCESS: Manager created with Better Auth-compatible account');
+    console.log('[API /managers POST] SUCCESS: Manager created with id:', userId);
 
     // Return the created user
     const createdUser = await sql`
