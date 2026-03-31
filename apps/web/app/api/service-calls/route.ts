@@ -71,7 +71,11 @@ export async function GET(request: Request) {
         ORDER BY sc.created_at DESC
       `;
     } else if (fromDate && toDate) {
-      // Date range filter
+      // Date range filter - use IST timezone boundaries for consistent filtering
+      const nextDay = new Date(toDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDayStr = nextDay.toISOString().split('T')[0];
+      
       calls = await sql`
         SELECT 
           sc.id,
@@ -98,8 +102,8 @@ export async function GET(request: Request) {
         LEFT JOIN "user" u ON sc.assigned_engineer_user_id = u.id
         WHERE sc.manager_user_id = ${user.id}
         AND sc.business_id = ${user.business_id}
-        AND sc.created_at::date >= ${fromDate}::date
-        AND sc.created_at::date <= ${toDate}::date
+        AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${fromDate}::date
+        AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date < ${nextDayStr}::date
         ORDER BY sc.created_at DESC
       `;
     } else {
