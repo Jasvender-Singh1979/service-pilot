@@ -1,6 +1,7 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
+import { getTodayIST } from "@/lib/dateUtils";
 
 export async function GET(request: Request) {
   try {
@@ -262,22 +263,38 @@ export async function POST(request: Request) {
       .substring(0, 3)
       .toUpperCase();
 
-    // Generate Call ID using pure integer sequence logic
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const year = String(now.getFullYear()).slice(-2);
-    const month = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1; // getMonth returns 0-11, we need 1-12
+    // Generate Call ID using IST timezone (Asia/Kolkata)
+    // CRITICAL: Must use IST date/month for call ID, not UTC or server timezone
+    const todayIST = getTodayIST(); // Returns YYYY-MM-DD in IST
+    const [istYear, istMonth, istDay] = todayIST.split('-');
+    
+    const day = istDay;
+    const year = istYear.slice(-2);
+    const monthNum = parseInt(istMonth);
+    
+    // Convert month number to 3-letter abbreviation
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const month = monthNames[monthNum - 1];
+    const currentYear = parseInt(istYear);
+    const currentMonth = monthNum;
 
-    // Get the MAX monthly_sequence_number for this manager in the current month
-    // This is pure integer logic - no string parsing
+    console.log('[SERVICE_CALL_CREATE] Call ID Generation - IST Details:', {
+      todayIST,
+      year,
+      month,
+      day,
+      currentYear,
+      currentMonth,
+    });
+
+    // Get the MAX monthly_sequence_number for this manager in the current IST month
+    // CRITICAL: Use IST-converted month/year, not UTC
     const maxSequenceResult = await sql`
       SELECT COALESCE(MAX(monthly_sequence_number), 0) as max_sequence
       FROM service_call
       WHERE manager_user_id = ${user.id}
-      AND EXTRACT(YEAR FROM created_at) = ${currentYear}
-      AND EXTRACT(MONTH FROM created_at) = ${currentMonth}
+      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${istYear}-${istMonth}-01
+      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date < (${istYear}-${istMonth}-01::date + interval '1 month')
     `;
 
     const maxSequenceNumber = maxSequenceResult[0]?.max_sequence || 0;

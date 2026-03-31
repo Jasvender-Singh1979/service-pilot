@@ -137,9 +137,11 @@ export async function POST(request: Request) {
     // Create engineer using Better Auth's server-side API
     console.log('[API /engineers POST] [STEP 4] Calling auth.api.signUpEmail() with correct API format...');
     
-    let createResult;
+    let createResult: any;
     try {
       // Better Auth API signature requires 'body' parameter and optionally 'headers'
+      // Returns: { user: {...}, session: {...} } (not wrapped in { data })
+      // See: https://better-auth.com/docs/concepts/api
       createResult = await auth.api.signUpEmail({
         body: {
           email: email.toLowerCase(),
@@ -148,42 +150,51 @@ export async function POST(request: Request) {
         },
         headers: new Headers(request.headers),
       });
-      console.log('[API /engineers POST] [STEP 4] auth.api.signUpEmail() returned:', { 
-        hasData: !!createResult.data,
-        hasError: !!createResult.error,
-        hasUser: !!createResult.data?.user
-      });
+      
+      // Log the actual return structure for debugging
+      console.log('[API /engineers POST] [STEP 4] auth.api.signUpEmail() returned:');
+      console.log('[API /engineers POST] [DEBUG] Return value type:', typeof createResult);
+      console.log('[API /engineers POST] [DEBUG] Return value keys:', Object.keys(createResult || {}));
+      console.log('[API /engineers POST] [DEBUG] createResult.user exists:', !!createResult?.user);
+      console.log('[API /engineers POST] [DEBUG] createResult.user.id:', createResult?.user?.id);
+      
     } catch (authApiError: any) {
       console.error('[API /engineers POST] [STEP 4] EXCEPTION during auth.api.signUpEmail():', {
         message: authApiError?.message,
         code: authApiError?.code,
+        status: authApiError?.status,
         stack: authApiError?.stack,
       });
       throw authApiError;
     }
 
-    if (!createResult.data?.user) {
-      console.error('[API /engineers POST] [ERROR] Better Auth failed to create user:', {
-        error: createResult.error,
-        data: createResult.data,
+    // Check if user was created successfully
+    // Better Auth returns { user: {...}, session: {...} } on success
+    // It throws an error on failure (not a return value with error field)
+    if (!createResult?.user || !createResult.user.id) {
+      console.error('[API /engineers POST] [ERROR] Better Auth did not return user object:', {
+        returnedKeys: Object.keys(createResult || {}),
+        hasUser: !!createResult?.user,
+        returnValue: JSON.stringify(createResult),
       });
-      const errorMsg = createResult.error?.message || 'Failed to create engineer account';
       
-      // Return detailed error in development
       const isDev = process.env.NODE_ENV === 'development';
       return NextResponse.json(
         { 
-          error: errorMsg,
-          details: isDev ? { betterAuthError: createResult.error } : undefined
+          error: 'Failed to create engineer account - user creation returned no user ID',
+          details: isDev ? { 
+            returnedKeys: Object.keys(createResult || {}),
+            returnValue: createResult
+          } : undefined
         },
         { status: 400 }
       );
     }
 
-    const userId = createResult.data.user.id;
+    const userId = createResult.user.id;
     console.log('[API /engineers POST] [STEP 4] ✅ Engineer created via Better Auth:', { 
       userId, 
-      email: createResult.data.user.email 
+      email: createResult.user.email 
     });
 
     console.log('[API /engineers POST] [STEP 5] Updating user with engineer-specific fields...');
