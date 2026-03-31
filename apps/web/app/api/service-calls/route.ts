@@ -28,9 +28,17 @@ export async function GET(request: Request) {
     
     if (month) {
       // Month filter: YYYY-MM format
+      // CRITICAL: Use IST timezone to match call creation logic
       const [year, monthNum] = month.split('-');
       const yearNum = parseInt(year);
       const monthInt = parseInt(monthNum);
+      
+      // Build IST month boundaries for query
+      const monthStart = `${year}-${String(monthInt).padStart(2, '0')}-01`;
+      const nextMonth = monthInt === 12 ? monthInt + 1 : monthInt + 1;
+      const nextMonthStr = String(nextMonth).padStart(2, '0');
+      const nextYear = monthInt === 12 ? parseInt(year) + 1 : parseInt(year);
+      const monthEnd = `${nextYear}-${nextMonthStr}-01`;
       
       calls = await sql`
         SELECT 
@@ -58,8 +66,8 @@ export async function GET(request: Request) {
         LEFT JOIN "user" u ON sc.assigned_engineer_user_id = u.id
         WHERE sc.manager_user_id = ${user.id}
         AND sc.business_id = ${user.business_id}
-        AND EXTRACT(YEAR FROM sc.created_at) = ${yearNum}
-        AND EXTRACT(MONTH FROM sc.created_at) = ${monthInt}
+        AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${monthStart}::date
+        AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date < ${monthEnd}::date
         ORDER BY sc.created_at DESC
       `;
     } else if (fromDate && toDate) {
