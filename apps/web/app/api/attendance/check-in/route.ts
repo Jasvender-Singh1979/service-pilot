@@ -4,6 +4,13 @@ import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { getTodayIST } from "@/lib/dateUtils";
 import { v4 as uuidv4 } from "uuid";
 
+interface CheckInRequest {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  address?: string;
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getSessionUserFromRequest();
@@ -31,6 +38,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const body = await request.json() as CheckInRequest;
+    const { latitude, longitude, accuracy, address } = body;
+
     // Get today's date in IST
     const todayDate = getTodayIST();
     const nowIST = new Date().toISOString();
@@ -43,6 +53,14 @@ export async function POST(request: Request) {
         AND attendance_date = ${todayDate}
     `;
 
+    // RULE: Prevent duplicate check-in
+    if (existingRecords.length > 0 && existingRecords[0].check_in_time) {
+      return NextResponse.json(
+        { error: "Already checked in today. Please check out first." },
+        { status: 400 }
+      );
+    }
+
     let attendance;
 
     if (existingRecords.length > 0) {
@@ -52,7 +70,13 @@ export async function POST(request: Request) {
         UPDATE attendance
         SET
           check_in_time = ${nowIST},
+          check_in_latitude = ${latitude || null},
+          check_in_longitude = ${longitude || null},
+          check_in_accuracy = ${accuracy || null},
+          check_in_address = ${address || null},
           status = 'checked_in',
+          last_activity_time = ${nowIST},
+          attendance_status = 'incomplete',
           updated_at = NOW()
         WHERE id = ${existingId}
         RETURNING *
@@ -68,7 +92,13 @@ export async function POST(request: Request) {
           manager_user_id,
           attendance_date,
           check_in_time,
-          status
+          check_in_latitude,
+          check_in_longitude,
+          check_in_accuracy,
+          check_in_address,
+          status,
+          last_activity_time,
+          attendance_status
         )
         VALUES (
           ${uuidv4()},
@@ -77,7 +107,13 @@ export async function POST(request: Request) {
           ${managerId},
           ${todayDate},
           ${nowIST},
-          'checked_in'
+          ${latitude || null},
+          ${longitude || null},
+          ${accuracy || null},
+          ${address || null},
+          'checked_in',
+          ${nowIST},
+          'incomplete'
         )
         RETURNING *
       `;

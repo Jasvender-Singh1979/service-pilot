@@ -3,6 +3,13 @@ import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { getTodayIST } from "@/lib/dateUtils";
 
+interface CheckOutRequest {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  address?: string;
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getSessionUserFromRequest();
@@ -24,6 +31,9 @@ export async function POST(request: Request) {
     const todayDate = getTodayIST();
     const nowIST = new Date().toISOString();
 
+    const body = await request.json() as CheckOutRequest;
+    const { latitude, longitude, accuracy, address } = body;
+
     // Get today's attendance record
     const existingAttendance = await sql`
       SELECT * FROM attendance
@@ -41,7 +51,7 @@ export async function POST(request: Request) {
 
     const record = existingAttendance[0];
 
-    // Validate check-in exists
+    // RULE: Prevent check-out without check-in
     if (!record.check_in_time) {
       return NextResponse.json(
         { error: "Cannot check out without checking in first" },
@@ -60,12 +70,22 @@ export async function POST(request: Request) {
       );
     }
 
+    // Calculate worked duration in minutes
+    const workedMinutes = Math.floor((checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60));
+
     // Update attendance record
     const updated = await sql`
       UPDATE attendance
       SET
         check_out_time = ${nowIST},
+        check_out_latitude = ${latitude || null},
+        check_out_longitude = ${longitude || null},
+        check_out_accuracy = ${accuracy || null},
+        check_out_address = ${address || null},
         status = 'checked_out',
+        last_activity_time = ${nowIST},
+        worked_duration_minutes = ${workedMinutes},
+        attendance_status = 'complete',
         updated_at = NOW()
       WHERE business_id = ${businessId}
       AND engineer_user_id = ${engineerId}
