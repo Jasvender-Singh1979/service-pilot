@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { format } from 'date-fns';
 import { Capacitor } from '@capacitor/core';
-import { formatDuration, formatLocation, formatLocationAsync } from '@/lib/formatters';
+import { formatLocation, formatLocationAsync } from '@/lib/formatters';
 
 interface GeolocationData {
   latitude: number;
@@ -32,6 +32,7 @@ interface AttendanceRecord {
 
 export default function AttendanceCard() {
   const [attendance, setAttendance] = useState<AttendanceRecord | null>(null);
+  const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -40,6 +41,7 @@ export default function AttendanceCard() {
 
   useEffect(() => {
     fetchAttendance();
+    fetchCutoffTime();
   }, []);
 
   // Resolve check-in location to friendly name when attendance changes
@@ -100,6 +102,28 @@ export default function AttendanceCard() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCutoffTime = async () => {
+    try {
+      const response = await fetch(
+        `/api/attendance/cutoff-time`,
+        {
+          credentials: 'include',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch cutoff time: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCutoffTime(data.cutoff_time);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error fetching cutoff time:', errorMessage);
+      setCutoffTime(null);
     }
   };
 
@@ -280,6 +304,38 @@ export default function AttendanceCard() {
     }
   };
 
+  const isOnTime = () => {
+    if (!attendance?.checkInTime || !cutoffTime) return null;
+    
+    try {
+      // Get check-in time in IST
+      const checkInDate = new Date(attendance.checkInTime);
+      const checkInHHMM = checkInDate.toLocaleString('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      
+      // Compare lexicographically (works for HH:MM format)
+      return checkInHHMM <= cutoffTime;
+    } catch (error) {
+      console.error('Error checking timeliness:', error);
+      return null;
+    }
+  };
+
+  const getTimelinessDisplay = () => {
+    if (attendance?.status === 'not_checked_in' || !attendance?.checkInTime || !cutoffTime) {
+      return null;
+    }
+    
+    const onTime = isOnTime();
+    if (onTime === null) return null;
+    
+    return onTime ? 'On Time' : 'Late';
+  };
+
   if (loading) {
     return (
       <div className="px-6 mb-8">
@@ -327,11 +383,27 @@ export default function AttendanceCard() {
           </div>
         </div>
 
-        {/* Worked Duration (show if duration exists) */}
-        {(attendance?.worked_duration_minutes || attendance?.status === 'checked_out') && (
-          <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-[14px] border border-blue-200">
-            <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Today's Duration</div>
-            <div className="text-2xl font-black text-blue-700">{formatDuration(attendance.worked_duration_minutes)}</div>
+        {/* Cutoff Time & Timeliness */}
+        {cutoffTime && (
+          <div className="mb-6 p-3 bg-slate-100 rounded-[12px] border border-slate-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-slate-600 font-bold mb-1">Cutoff Time</div>
+                <div className="text-lg font-black text-slate-900">{cutoffTime}</div>
+              </div>
+              {getTimelinessDisplay() && (
+                <div className={`text-center`}>
+                  <div className={`text-xs font-bold uppercase tracking-wider mb-1 ${
+                    isOnTime() ? 'text-green-600' : 'text-orange-600'
+                  }`}>
+                    {getTimelinessDisplay()}
+                  </div>
+                  <div className={`w-2 h-2 rounded-full ${
+                    isOnTime() ? 'bg-green-600' : 'bg-orange-600'
+                  }`}></div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
