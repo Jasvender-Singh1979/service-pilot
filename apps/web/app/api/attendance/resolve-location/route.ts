@@ -4,7 +4,8 @@ import { getSessionUserFromRequest } from "@/lib/auth-utils";
 
 /**
  * Resolve a location to its friendly name if a named location matches
- * Uses GPS tolerance of ±0.0005 (approximately 50 meters)
+ * Uses normalized 2-decimal coordinate matching (approximately 50-1000 meter tolerance)
+ * Example: 29.950300 and 29.951000 both normalize to 29.95 and will match
  */
 export async function POST(request: Request) {
   try {
@@ -29,21 +30,22 @@ export async function POST(request: Request) {
       });
     }
 
-    // Check if coordinates match any named location
-    // Using tolerance of ±0.0005 (approximately 50 meters)
+    // Check if coordinates match any named location using normalized 2-decimal coordinates
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       const lat = Number(latitude);
       const lng = Number(longitude);
 
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        const tolerance = 0.0005;
+        // Normalize coordinates to 2 decimal places for matching
+        const normalizedLat = Number(lat.toFixed(2));
+        const normalizedLng = Number(lng.toFixed(2));
 
         const matchedLocation = await sql`
           SELECT location_name
           FROM named_location
           WHERE business_id = ${businessId}
-            AND ABS(latitude - ${lat}) <= ${tolerance}
-            AND ABS(longitude - ${lng}) <= ${tolerance}
+            AND ROUND(latitude::numeric, 2) = ${normalizedLat}
+            AND ROUND(longitude::numeric, 2) = ${normalizedLng}
           LIMIT 1
         `;
 

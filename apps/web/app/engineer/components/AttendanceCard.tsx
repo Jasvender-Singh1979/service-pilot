@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { format } from 'date-fns';
 import { Capacitor } from '@capacitor/core';
-import { formatDuration, formatLocation } from '@/lib/formatters';
+import { formatDuration, formatLocation, formatLocationAsync } from '@/lib/formatters';
 
 interface GeolocationData {
   latitude: number;
@@ -32,10 +32,22 @@ export default function AttendanceCard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAttendance();
   }, []);
+
+  // Resolve location to friendly name when attendance changes
+  useEffect(() => {
+    if (attendance?.check_in_latitude || attendance?.check_in_longitude || attendance?.check_in_address) {
+      formatLocationAsync(
+        attendance.check_in_latitude,
+        attendance.check_in_longitude,
+        attendance.check_in_address
+      ).then(setResolvedLocation);
+    }
+  }, [attendance?.check_in_latitude, attendance?.check_in_longitude, attendance?.check_in_address]);
 
   const fetchAttendance = async () => {
     try {
@@ -311,8 +323,8 @@ export default function AttendanceCard() {
               <i className="ph-fill ph-map-pin text-sm text-slate-500"></i>
               Check-in Location
             </div>
-            <div className="text-xs text-slate-700 font-mono">
-              {formatLocation(attendance.check_in_latitude, attendance.check_in_longitude, attendance.check_in_address)}
+            <div className="text-xs text-slate-700">
+              {resolvedLocation || formatLocation(attendance.check_in_latitude, attendance.check_in_longitude, attendance.check_in_address)}
             </div>
           </div>
         ) : null}

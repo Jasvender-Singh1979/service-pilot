@@ -4,6 +4,36 @@
  */
 
 /**
+ * Normalize coordinates to 2 decimal places for matching
+ * Example: 29.950300 → 29.95, 77.546900 → 77.55
+ * Used for friendly location matching to group nearby GPS readings
+ * 
+ * @param value - latitude or longitude (number, string, null, or undefined)
+ * @returns normalized value to 2 decimals as string, or null if invalid
+ */
+export function normalizeCoordinate(value: number | string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return num.toFixed(2);
+}
+
+/**
+ * Get a normalized coordinate key for matching
+ * Example: latitude=29.950300, longitude=77.546900 → "29.95,77.55"
+ * 
+ * @param lat - latitude (number, string, null, or undefined)
+ * @param lng - longitude (number, string, null, or undefined)
+ * @returns normalized key or null if either coordinate is invalid
+ */
+export function getCoordinateKey(lat: number | string | null | undefined, lng: number | string | null | undefined): string | null {
+  const normalizedLat = normalizeCoordinate(lat);
+  const normalizedLng = normalizeCoordinate(lng);
+  if (normalizedLat === null || normalizedLng === null) return null;
+  return `${normalizedLat},${normalizedLng}`;
+}
+
+/**
  * Format duration from minutes to human-readable format
  * Examples: 35 min → 00Hr:35Min, 65 min → 01Hr:05Min, 120 min → 02Hr:00Min
  * 
