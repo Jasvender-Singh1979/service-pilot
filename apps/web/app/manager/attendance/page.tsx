@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
+import { formatDuration, formatLocation } from '@/lib/formatters';
 
 interface EngineerAttendance {
   id: string;
@@ -87,13 +88,7 @@ function AttendanceDashboardContent() {
     }
   };
 
-  const formatDuration = (minutes: number | null) => {
-    if (!minutes) return '--';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours === 0) return `${mins}m`;
-    return `${hours}h ${mins}m`;
-  };
+
 
   const getStatusColor = (status: string | null) => {
     switch (status) {
@@ -267,24 +262,26 @@ function AttendanceDashboardContent() {
                 </div>
               </div>
 
-              {selectedEngineer.check_in_latitude && selectedEngineer.check_in_longitude && (
+              {selectedEngineer.check_in_latitude || selectedEngineer.check_in_longitude || selectedEngineer.check_in_address ? (
                 <div>
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Last Known Location</h3>
                   <div className="p-4 bg-slate-50 rounded-[14px] border border-slate-200">
                     <div className="text-xs text-slate-700 font-mono">
-                      {selectedEngineer.check_in_latitude.toFixed(4)}, {selectedEngineer.check_in_longitude.toFixed(4)}
+                      {formatLocation(selectedEngineer.check_in_latitude, selectedEngineer.check_in_longitude, selectedEngineer.check_in_address)}
                     </div>
-                    <a
-                      href={`https://maps.google.com/?q=${selectedEngineer.check_in_latitude},${selectedEngineer.check_in_longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 font-bold mt-2 inline-block hover:underline"
-                    >
-                      Open in Google Maps →
-                    </a>
+                    {Number.isFinite(Number(selectedEngineer.check_in_latitude)) && Number.isFinite(Number(selectedEngineer.check_in_longitude)) && (
+                      <a
+                        href={`https://maps.google.com/?q=${selectedEngineer.check_in_latitude},${selectedEngineer.check_in_longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 font-bold mt-2 inline-block hover:underline"
+                      >
+                        Open in Google Maps →
+                      </a>
+                    )}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {selectedEngineer.assigned_calls_count > 0 && (
                 <div>

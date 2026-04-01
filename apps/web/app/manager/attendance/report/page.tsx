@@ -1,5 +1,6 @@
 'use client';
 
+// Cache bust - fixed safe formatters
 import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ManagerLayout from '@/app/components/ManagerLayout';
@@ -9,6 +10,7 @@ import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { formatDuration, formatLocation } from '@/lib/formatters';
 
 interface EngineerInfo {
   id: string;
@@ -129,30 +131,7 @@ function AttendanceReportContent() {
     }
   };
 
-  const formatDuration = (minutes: number | null) => {
-    if (!minutes) return '--';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours === 0) return `${mins}m`;
-    return `${hours}h ${mins}m`;
-  };
 
-  const formatLocation = (lat: number | null | string, lng: number | null | string, address: string | null) => {
-    if (address) return address;
-    
-    // Safely convert to numbers (PostgreSQL returns strings)
-    const latNum = Number(lat);
-    const lngNum = Number(lng);
-    
-    // Only format if both are valid finite numbers
-    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-      const safeLat = latNum.toFixed(6);
-      const safeLng = lngNum.toFixed(6);
-      return `${safeLat}, ${safeLng}`;
-    }
-    
-    return 'N/A';
-  };
 
   const generatePDF = async () => {
     if (!engineer || !records || !summary) {
@@ -345,7 +324,7 @@ function AttendanceReportContent() {
                       Total Hours
                     </div>
                     <div className="text-2xl font-black text-blue-600">
-                      {(summary.total_worked_minutes / 60).toFixed(1)}h
+                      {summary.total_worked_minutes ? (summary.total_worked_minutes / 60).toFixed(1) : 0}h
                     </div>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-[10px] border border-blue-200">
@@ -353,7 +332,7 @@ function AttendanceReportContent() {
                       Avg/Day
                     </div>
                     <div className="text-2xl font-black text-blue-600">
-                      {summary.total_days > 0
+                      {summary.total_days > 0 && summary.total_worked_minutes
                         ? (summary.total_worked_minutes / summary.total_days / 60).toFixed(1)
                         : 0}
                       h

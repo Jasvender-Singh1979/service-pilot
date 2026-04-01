@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { format } from 'date-fns';
 import { Capacitor } from '@capacitor/core';
+import { formatDuration, formatLocation } from '@/lib/formatters';
 
 interface GeolocationData {
   latitude: number;
@@ -20,9 +21,10 @@ interface AttendanceRecord {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  worked_duration_minutes?: number;
-  check_in_latitude?: number;
-  check_in_longitude?: number;
+  worked_duration_minutes?: number | null;
+  check_in_latitude?: number | null;
+  check_in_longitude?: number | null;
+  check_in_address?: string | null;
 }
 
 export default function AttendanceCard() {
@@ -247,14 +249,6 @@ export default function AttendanceCard() {
     }
   };
 
-  const formatDuration = (minutes: number | undefined) => {
-    if (!minutes) return '--';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours === 0) return `${mins}m`;
-    return `${hours}h ${mins}m`;
-  };
-
   if (loading) {
     return (
       <div className="px-6 mb-8">
@@ -303,7 +297,7 @@ export default function AttendanceCard() {
         </div>
 
         {/* Worked Duration (if checked out) */}
-        {attendance?.status === 'checked_out' && attendance?.worked_duration_minutes && (
+        {attendance?.status === 'checked_out' && (
           <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-[14px] border border-blue-200">
             <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Today's Duration</div>
             <div className="text-2xl font-black text-blue-700">{formatDuration(attendance.worked_duration_minutes)}</div>
@@ -311,17 +305,17 @@ export default function AttendanceCard() {
         )}
 
         {/* Location Info (if available) */}
-        {attendance?.check_in_latitude && attendance?.check_in_longitude && (
+        {attendance?.check_in_latitude || attendance?.check_in_longitude || attendance?.check_in_address ? (
           <div className="mb-6 p-3 bg-slate-50 rounded-[12px] border border-slate-200">
             <div className="text-xs text-slate-600 font-bold mb-2 flex items-center gap-1">
               <i className="ph-fill ph-map-pin text-sm text-slate-500"></i>
               Check-in Location
             </div>
             <div className="text-xs text-slate-700 font-mono">
-              {attendance.check_in_latitude.toFixed(4)}, {attendance.check_in_longitude.toFixed(4)}
+              {formatLocation(attendance.check_in_latitude, attendance.check_in_longitude, attendance.check_in_address)}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Action Button */}
         <button
