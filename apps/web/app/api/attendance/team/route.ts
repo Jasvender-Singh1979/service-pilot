@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const managerId = user.id;
+    const managerId = user.role === "super_admin" ? null : user.id;
     const businessId = user.business_id;
     const todayDate = getTodayIST();
 
@@ -33,36 +33,71 @@ export async function GET(request: Request) {
     `;
     const cutoffTime = settingsResult.length > 0 ? settingsResult[0].checkin_cutoff_time : null;
 
-    // Get all engineers under this manager
-    const engineers = await sql`
-      SELECT 
-        id,
-        name,
-        email,
-        mobile_number
-      FROM "user"
-      WHERE manager_user_id = ${managerId}
-      AND business_id = ${businessId}
-      AND role = 'engineer'
-      AND is_active = true
-      ORDER BY name ASC
-    `;
+    // Get all engineers under this manager/business
+    let engineers: any[];
+    if (managerId) {
+      engineers = await sql`
+        SELECT 
+          id,
+          name,
+          email,
+          mobile_number
+        FROM "user"
+        WHERE manager_user_id = ${managerId}
+        AND business_id = ${businessId}
+        AND role = 'engineer'
+        AND is_active = true
+        ORDER BY name ASC
+      `;
+    } else {
+      // For super_admin, get all engineers in the business
+      engineers = await sql`
+        SELECT 
+          id,
+          name,
+          email,
+          mobile_number
+        FROM "user"
+        WHERE business_id = ${businessId}
+        AND role = 'engineer'
+        AND is_active = true
+        ORDER BY name ASC
+      `;
+    }
 
     // Get attendance records for today
-    const attendanceRecords = await sql`
-      SELECT 
-        id,
-        engineer_user_id,
-        attendance_date,
-        check_in_time,
-        check_out_time,
-        status,
-        notes
-      FROM attendance
-      WHERE business_id = ${businessId}
-      AND manager_user_id = ${managerId}
-      AND attendance_date = ${todayDate}
-    `;
+    let attendanceRecords: any[];
+    if (managerId) {
+      attendanceRecords = await sql`
+        SELECT 
+          id,
+          engineer_user_id,
+          attendance_date,
+          check_in_time,
+          check_out_time,
+          attendance_status,
+          notes
+        FROM attendance
+        WHERE business_id = ${businessId}
+        AND manager_user_id = ${managerId}
+        AND attendance_date = ${todayDate}
+      `;
+    } else {
+      // For super_admin, get all attendance records for the business
+      attendanceRecords = await sql`
+        SELECT 
+          id,
+          engineer_user_id,
+          attendance_date,
+          check_in_time,
+          check_out_time,
+          attendance_status,
+          notes
+        FROM attendance
+        WHERE business_id = ${businessId}
+        AND attendance_date = ${todayDate}
+      `;
+    }
 
     // Create a map of attendance by engineer ID for quick lookup
     const attendanceMap = new Map();

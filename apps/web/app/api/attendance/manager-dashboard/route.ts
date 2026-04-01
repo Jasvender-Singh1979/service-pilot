@@ -2,14 +2,16 @@ import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { getTodayIST } from "@/lib/dateUtils";
+import { checkTimeliness } from "@/lib/attendanceUtils";
 
 /**
  * GET /api/attendance/manager-dashboard
  * Manager API to view real-time attendance status of all assigned engineers.
  *
  * Returns:
- * - engineers: list of engineers with today's attendance info
- * - summary: count of checked-in, checked-out, not-checked-in
+ * - engineers: list of engineers with today's attendance info, including timeliness
+ * - summary: count of checked-in, checked-out, not-checked-in, on_time, late
+ * - cutoffTime: the configured cutoff time for punctuality
  */
 export async function GET(request: Request) {
   try {
@@ -31,6 +33,15 @@ export async function GET(request: Request) {
     const managerId = user.role === "super_admin" ? null : user.id;
     const todayDate = getTodayIST();
 
+    // Fetch cutoff time for this business (CRITICAL for timeliness calculation)
+    const settingsResult = await sql`
+      SELECT checkin_cutoff_time
+      FROM manager_attendance_settings
+      WHERE business_id = ${businessId}
+      LIMIT 1
+    `;
+    const cutoffTime = settingsResult.length > 0 ? settingsResult[0].checkin_cutoff_time : null;
+
     // Fetch all engineers for this manager/business
     let engineers: any[];
 
@@ -41,7 +52,7 @@ export async function GET(request: Request) {
           u.name,
           u.email,
           u.mobile_number,
-          a.status as attendance_status,
+          a.attendance_status,
           a.check_in_time,
           a.check_out_time,
           a.worked_duration_minutes,
@@ -74,7 +85,7 @@ export async function GET(request: Request) {
           u.name,
           u.email,
           u.mobile_number,
-          a.status as attendance_status,
+          a.attendance_status,
           a.check_in_time,
           a.check_out_time,
           a.worked_duration_minutes,
@@ -101,56 +112,39 @@ export async function GET(request: Request) {
       `;
     }
 
-    // Get summary
-    let summary;
+    // Compute timeliness for each engineer using shared utility
+    const engineersWithTimeliness = engineers.map((eng: any) => {
+      let timeliness: string | null = null;
+      if (eng.check_in_time) {
+        timeliness = checkTimeliness(eng.check_in_time, cutoffTime);
+      }
+      return {
+        ...eng,
+        timeliness, // "on_time", "late", or null
+      };
+    });
 
-    if (managerId) {
-      const stats = await sql`
-        SELECT
-          COUNT(DISTINCT CASE WHEN a.status = 'checked_in' THEN u.id END) as checked_in_count,
-          COUNT(DISTINCT CASE WHEN a.status = 'checked_out' THEN u.id END) as checked_out_count,
-          COUNT(DISTINCT CASE WHEN a.status IS NULL THEN u.id END) as not_checked_in_count,
-          COUNT(DISTINCT u.id) as total_engineers
-        FROM "user" u
-        LEFT JOIN attendance a ON u.id = a.engineer_user_id
-          AND a.business_id = ${businessId}
-          AND a.attendance_date = ${todayDate}
-        WHERE u.business_id = ${businessId}
-          AND u.role = 'engineer'
-          AND u.manager_user_id = ${managerId}
-      `;
-      summary = stats[0] || {
-        checked_in_count: 0,
-        checked_out_count: 0,
-        not_checked_in_count: 0,
-        total_engineers: 0,
-      };
-    } else {
-      const stats = await sql`
-        SELECT
-          COUNT(DISTINCT CASE WHEN a.status = 'checked_in' THEN u.id END) as checked_in_count,
-          COUNT(DISTINCT CASE WHEN a.status = 'checked_out' THEN u.id END) as checked_out_count,
-          COUNT(DISTINCT CASE WHEN a.status IS NULL THEN u.id END) as not_checked_in_count,
-          COUNT(DISTINCT u.id) as total_engineers
-        FROM "user" u
-        LEFT JOIN attendance a ON u.id = a.engineer_user_id
-          AND a.business_id = ${businessId}
-          AND a.attendance_date = ${todayDate}
-        WHERE u.business_id = ${businessId}
-          AND u.role = 'engineer'
-      `;
-      summary = stats[0] || {
-        checked_in_count: 0,
-        checked_out_count: 0,
-        not_checked_in_count: 0,
-        total_engineers: 0,
-      };
-    }
+    // Calculate summary including timeliness counts
+    const checkedInCount = engineersWithTimeliness.filter((e: any) => e.attendance_status === 'checked_in').length;
+    const checkedOutCount = engineersWithTimeliness.filter((e: any) => e.attendance_status === 'checked_out').length;
+    const notCheckedInCount = engineersWithTimeliness.filter((e: any) => !e.attendance_status).length;
+    const onTimeCount = engineersWithTimeliness.filter((e: any) => e.timeliness === 'on_time').length;
+    const lateCount = engineersWithTimeliness.filter((e: any) => e.timeliness === 'late').length;
+
+    const summary = {
+      checked_in_count: checkedInCount,
+      checked_out_count: checkedOutCount,
+      not_checked_in_count: notCheckedInCount,
+      total_engineers: engineersWithTimeliness.length,
+      on_time_count: onTimeCount,  // NEW: count of on-time check-ins
+      late_count: lateCount,        // NEW: count of late check-ins
+    };
 
     return NextResponse.json({
       success: true,
-      engineers,
+      engineers: engineersWithTimeliness,
       summary,
+      cutoffTime,  // Return cutoff time so frontend can display it if needed
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
