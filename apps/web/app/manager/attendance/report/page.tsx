@@ -179,7 +179,7 @@ function AttendanceReportContent() {
         heightLeft -= 277;
       }
 
-      pdf.save(`${engineer.name}_attendance_${startDate}_to_${endDate}.pdf`);
+      pdf.save(`${engineer.name}.pdf`);
       toast.success('PDF downloaded successfully');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -324,7 +324,7 @@ function AttendanceReportContent() {
                       Total Hours
                     </div>
                     <div className="text-2xl font-black text-blue-600">
-                      {summary.total_worked_minutes ? (summary.total_worked_minutes / 60).toFixed(1) : 0}h
+                      {formatDuration(summary.total_worked_minutes)}
                     </div>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-[10px] border border-blue-200">
@@ -332,10 +332,7 @@ function AttendanceReportContent() {
                       Avg/Day
                     </div>
                     <div className="text-2xl font-black text-blue-600">
-                      {summary.total_days > 0 && summary.total_worked_minutes
-                        ? (summary.total_worked_minutes / summary.total_days / 60).toFixed(1)
-                        : 0}
-                      h
+                      {formatDuration(summary.total_days > 0 && summary.total_worked_minutes ? summary.total_worked_minutes / summary.total_days : 0)}
                     </div>
                   </div>
                 </div>

@@ -32,8 +32,9 @@ export function formatDuration(minutes: number | null | undefined): string {
 }
 
 /**
- * Format location from latitude/longitude or address
+ * Format location from latitude/longitude or address (synchronous, basic version)
  * Prefers address if available, falls back to coordinates
+ * Does NOT check named locations (use the async version for that)
  * 
  * @param lat - latitude (number, string, null, or undefined)
  * @param lng - longitude (number, string, null, or undefined)
@@ -66,4 +67,38 @@ export function formatLocation(
   }
 
   return 'N/A';
+}
+
+/**
+ * Async version: Format location with named location resolution
+ * Checks if coordinates match a named location, otherwise uses address or coordinates
+ * 
+ * @param lat - latitude (number, null, or undefined)
+ * @param lng - longitude (number, null, or undefined)
+ * @param address - location address (string, null, or undefined)
+ * @returns Promise<formatted location string>
+ */
+export async function formatLocationAsync(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+  address: string | null | undefined
+): Promise<string> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/attendance/resolve-location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ latitude: lat, longitude: lng, address }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return result.value || 'N/A';
+    }
+  } catch (error) {
+    console.warn('Error resolving location:', error);
+  }
+
+  // Fallback to synchronous version
+  return formatLocation(lat, lng, address);
 }

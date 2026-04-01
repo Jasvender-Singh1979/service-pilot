@@ -132,7 +132,16 @@ function AttendanceDashboardContent() {
       <div className="px-6 pt-6 mb-8">
         <div className="mb-3 p-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-[24px] text-white shadow-[0_8px_28px_rgba(37,99,235,0.25)] border border-blue-500 relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-          <h2 className="text-[11px] font-black mb-4 opacity-95 uppercase tracking-wider relative z-10">Team Attendance</h2>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <h2 className="text-[11px] font-black opacity-95 uppercase tracking-wider">Team Attendance</h2>
+            <Link
+              href="/manager/attendance/named-locations"
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-[8px] text-xs font-bold transition-colors flex items-center gap-1"
+            >
+              <i className="ph-fill ph-map-pin text-sm"></i>
+              <span>Locations</span>
+            </Link>
+          </div>
           <div className="grid grid-cols-2 gap-4 relative z-10">
             <div>
               <div className="text-3xl font-black mb-1 tracking-tighter">{summary.checked_in_count}</div>

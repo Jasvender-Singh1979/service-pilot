@@ -296,8 +296,8 @@ export default function AttendanceCard() {
           </div>
         </div>
 
-        {/* Worked Duration (if checked out) */}
-        {attendance?.status === 'checked_out' && (
+        {/* Worked Duration (show if duration exists) */}
+        {(attendance?.worked_duration_minutes || attendance?.status === 'checked_out') && (
           <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-[14px] border border-blue-200">
             <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Today's Duration</div>
             <div className="text-2xl font-black text-blue-700">{formatDuration(attendance.worked_duration_minutes)}</div>
