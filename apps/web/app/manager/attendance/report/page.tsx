@@ -137,10 +137,21 @@ function AttendanceReportContent() {
     return `${hours}h ${mins}m`;
   };
 
-  const formatLocation = (lat: number | null, lng: number | null, address: string | null) => {
+  const formatLocation = (lat: number | null | string, lng: number | null | string, address: string | null) => {
     if (address) return address;
-    if (lat && lng) return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    return '--';
+    
+    // Safely convert to numbers (PostgreSQL returns strings)
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    
+    // Only format if both are valid finite numbers
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      const safeLat = latNum.toFixed(6);
+      const safeLng = lngNum.toFixed(6);
+      return `${safeLat}, ${safeLng}`;
+    }
+    
+    return 'N/A';
   };
 
   const generatePDF = async () => {
