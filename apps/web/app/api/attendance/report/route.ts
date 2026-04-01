@@ -2,6 +2,7 @@ import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { checkTimeliness } from "@/lib/attendanceUtils";
+import { getCustomRangeIST } from "@/lib/dateUtils";
 
 export async function GET(request: Request) {
   try {
@@ -31,7 +32,36 @@ export async function GET(request: Request) {
       );
     }
 
+    // CRITICAL: startDate and endDate MUST be in IST calendar date format (YYYY-MM-DD)
+    // They should come from the frontend using getTodayIST() or getISTDateNDaysAgo()
+    // NOT from browser's local date picker
+    console.log('[ATTENDANCE_REPORT_API] Received date range:', {
+      startDate,
+      endDate,
+      engineerId,
+    });
+
     const businessId = user.business_id;
+
+    // DEBUG: Log input parameters
+    console.log('[ATTENDANCE_REPORT_DEBUG] Input parameters:', {
+      engineerId,
+      startDate,
+      endDate,
+      businessId,
+      userRole: user.role,
+    });
+
+    // CRITICAL: The report receives startDate and endDate as YYYY-MM-DD strings
+    // from the browser date picker. These are supposed to be IST calendar dates.
+    // We filter attendance_date (which is a DATE column storing IST dates) using direct comparison.
+    // This works because attendance_date stores IST calendar dates (e.g., "2026-04-02")
+    // and the browser sends IST calendar dates (e.g., "2026-04-02").
+    // They match directly - no conversion needed for DATE column comparison.
+    
+    // However, if the dates come from a browser in a different timezone,
+    // we should ideally convert them. For now, we assume the business operates in IST.
+    // TODO: If supporting multiple timezones, add business timezone config and convert accordingly.
 
     // Fetch cutoff time for this business
     const settingsResult = await sql`
@@ -58,7 +88,26 @@ export async function GET(request: Request) {
 
     const engineerData = engineer[0];
 
+    // DEBUG: Check all attendance records for this engineer (regardless of date)
+    const allRecords = await sql`
+      SELECT
+        id,
+        attendance_date,
+        check_in_time,
+        check_out_time,
+        created_at
+      FROM attendance
+      WHERE
+        business_id = ${businessId}
+        AND engineer_user_id = ${engineerId}
+      ORDER BY attendance_date DESC
+      LIMIT 10
+    `;
+    console.log('[ATTENDANCE_REPORT_DEBUG] All attendance records for engineer (last 10):', allRecords);
+
     // Fetch attendance records for the date range
+    // attendance_date is an IST calendar date (DATE type)
+    // Direct comparison works: WHERE attendance_date >= '2026-04-02' matches IST Apr 2
     const records = await sql`
       SELECT
         attendance_date,
@@ -80,6 +129,13 @@ export async function GET(request: Request) {
         AND attendance_date <= ${endDate}::date
       ORDER BY attendance_date DESC
     `;
+    
+    console.log('[ATTENDANCE_REPORT_DEBUG] Filtered records for range:', {
+      startDate,
+      endDate,
+      recordCount: records.length,
+      records: records,
+    });"
 
     // Derive attendance status from check-in/check-out
     // RULES for status (from selected date range):

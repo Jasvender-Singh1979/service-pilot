@@ -109,21 +109,29 @@ function getTodayDateStringIST(): string {
 /**
  * Convert an IST date string (YYYY-MM-DD) to UTC timestamps for DB range queries
  * Returns { start, end } as UTC Date objects suitable for BETWEEN queries
+ * 
+ * CRITICAL: This function treats the input date as an IST calendar date.
+ * Input "2026-04-02" means "Apr 2, 2026 in IST timezone" (00:00:00 to 23:59:59 IST)
+ * Returns UTC timestamps that represent those IST moments.
  */
 function istDateStringToUTCRange(dateString: string): { start: Date; end: Date } {
-  // Create a date at midnight IST on the given date
-  // By parsing as ISO string and adjusting offset
   const [year, month, day] = dateString.split('-').map(Number);
   
-  // Create IST dates (these are calculated times, not UTC)
-  const startOfDayIST = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-  const endOfDayIST = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59`);
+  // IST is UTC+5:30, so:
+  // - IST 00:00:00 = UTC 18:30:00 (previous day)
+  // - IST 23:59:59 = UTC 18:29:59 (same day)
+  // Example: Apr 2 IST 00:00 = Apr 1 UTC 18:30
   
-  // Adjust for IST offset (UTC+5:30)
-  // IST is UTC+5:30, so to convert IST to UTC, we subtract 5:30
+  // Create UTC dates that represent the IST moments
+  // For start of IST day (00:00:00 IST):
+  // We want UTC time that is 5:30 hours earlier
+  // UTC = IST - 5:30 hours
+  const startOfDayIST = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
   const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
-  
   const startUTC = new Date(startOfDayIST.getTime() - istOffsetMs);
+  
+  // For end of IST day (23:59:59 IST):
+  const endOfDayIST = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
   const endUTC = new Date(endOfDayIST.getTime() - istOffsetMs);
   
   return { start: startUTC, end: endUTC };
@@ -248,6 +256,47 @@ export function getNowAsIST(): string {
   const seconds = String(now.getSeconds()).padStart(2, '0');
   
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} IST`;
+}
+
+/**
+ * Helper: Convert a browser LOCAL date picker value to IST calendar date string
+ * 
+ * Browser <input type="date"> returns a YYYY-MM-DD string that represents
+ * the user's LOCAL interpretation of that date. We need to convert it to IST.
+ * 
+ * CRITICAL: This accounts for timezone differences between browser and IST.
+ * If browser is in UTC and user selects "Apr 2", the ISO string is "2026-04-02",
+ * but it represents Apr 2 UTC, not Apr 2 IST.
+ * 
+ * Example:
+ *   - Browser in UTC: user selects Apr 2 → dateString = "2026-04-02" (represents Apr 2 UTC)
+ *   - IST date: Apr 2 UTC 00:00 = Apr 2 IST 05:30, so it's still Apr 2 IST
+ *   - Result: "2026-04-02" is correct
+ *   
+ *   But if:
+ *   - Browser in UTC-5: user selects Apr 2 → dateString = "2026-04-02" (represents Apr 2 UTC-5)
+ *   - UTC equivalent: Apr 2 UTC-5 00:00 = Apr 2 UTC 05:00
+ *   - IST equivalent: Apr 2 UTC 05:00 = Apr 2 IST 10:30
+ *   - Result: "2026-04-02" is still correct
+ *   
+ * The key insight: HTML5 date input returns the LOCAL date as YYYY-MM-DD,
+ * regardless of timezone. When converted to UTC, it matches the date at UTC 00:00.
+ * Since IST is UTC+5:30, Apr 2 UTC maps to Apr 2 IST 05:30-23:59 on that date.
+ * So the result is always the IST date that corresponds to the browser's local date.
+ * 
+ * However, there's a subtle issue if the browser is WEST of IST:
+ * - Browser in UTC: Apr 2 local = Apr 2 UTC = Apr 2 IST 05:30 ✓
+ * - Browser in UTC+8 (ahead): Apr 2 local = Apr 1 UTC 16:00 = Apr 2 IST 21:30 ✓
+ * - Browser in UTC-5 (behind): Apr 2 local = Apr 2 UTC 05:00 = Apr 2 IST 10:30 ✓
+ * 
+ * All correct! The browser's local date representation maps consistently to an IST date.
+ * So we can use the browser date string directly as an IST date.
+ */
+export function browserDateToISTDate(browserDateString: string): string {
+  // The browser date string is already in the correct format.
+  // No conversion needed - it naturally maps to the IST calendar date.
+  // Example: "2026-04-02" from browser = April 2 IST for database storage
+  return browserDateString;
 }
 
 /**

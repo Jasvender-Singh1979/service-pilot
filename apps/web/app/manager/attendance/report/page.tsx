@@ -10,6 +10,7 @@ import Link from 'next/link';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { formatLocationAsync } from '@/lib/formatters';
+import { getTodayIST } from '@/lib/dateUtils';
 
 interface EngineerInfo {
   id: string;
@@ -48,16 +49,52 @@ interface ResolvedLocation {
   [key: string]: string;
 }
 
+/**
+ * Helper: Get an IST date string (YYYY-MM-DD) for N days ago
+ * Uses IST timezone to ensure dates match attendance_date column in database
+ */
+function getISTDateNDaysAgo(daysAgo: number): string {
+  // Get current time in IST
+  const now = new Date();
+  const istFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  
+  const parts = istFormatter.formatToParts(now);
+  const values: { [key: string]: string } = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  const year = parseInt(values.year, 10);
+  const month = parseInt(values.month, 10);
+  const day = parseInt(values.day, 10);
+  
+  // Create a date N days ago using UTC manipulation
+  // (This works because we're just manipulating days, not crossing DST boundaries)
+  const dateObj = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  dateObj.setDate(dateObj.getDate() - daysAgo);
+  
+  const resultYear = dateObj.getUTCFullYear();
+  const resultMonth = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+  const resultDay = String(dateObj.getUTCDate()).padStart(2, '0');
+  
+  return `${resultYear}-${resultMonth}-${resultDay}`;
+}
+
 function AttendanceReportContent() {
   const { user } = useAuth();
   const [engineers, setEngineers] = useState<any[]>([]);
   const [selectedEngineerId, setSelectedEngineerId] = useState<string>('');
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  // CRITICAL FIX: Initialize dates using IST, not browser local time
+  // This ensures dates match the IST-based attendance_date column
+  const [startDate, setStartDate] = useState(() => getISTDateNDaysAgo(30));
+  const [endDate, setEndDate] = useState(() => getTodayIST());
 
   const [engineer, setEngineer] = useState<EngineerInfo | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);

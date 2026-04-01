@@ -45,14 +45,22 @@ export async function POST(request: Request) {
     const todayDate = getTodayIST();
     const nowIST = new Date().toISOString();
 
+    // DEBUG: Log timezone and date calculation
+    console.log('[ATTENDANCE_CHECKIN_DEBUG] Date calculation:', {
+      nowIST,
+      todayDate,
+      engineerId,
+      businessId,
+    });
+
     // Guard: Validate date string before SQL
-    if (todayDate === "NaN-NaN-NaN" || !todayDate || !/^\d{4}-\d{2}-\d{2}$/.test(todayDate)) {
+    if (todayDate === "NaN-NaN-NaN" || !todayDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(todayDate)) {
       console.error("[ATTENDANCE_CHECKIN_API] Invalid date string:", { todayDate });
       return NextResponse.json(
         { error: "Invalid date calculation", details: { todayDate } },
         { status: 500 }
       );
-    }
+    }"
 
     // Step 1: SELECT existing attendance record for today
     const existingRecords = await sql`
@@ -62,13 +70,22 @@ export async function POST(request: Request) {
         AND attendance_date = ${todayDate}
     `;
 
+    // DEBUG: Log existing records
+    console.log('[ATTENDANCE_CHECKIN_DEBUG] Query for existing records:', {
+      todayDate,
+      engineerId,
+      businessId,
+      foundRecords: existingRecords.length,
+      firstRecord: existingRecords.length > 0 ? existingRecords[0] : null,
+    });
+
     // RULE: Prevent duplicate check-in
     if (existingRecords.length > 0 && existingRecords[0].check_in_time) {
       return NextResponse.json(
         { error: "Already checked in today. Please check out first." },
         { status: 400 }
       );
-    }
+    }"
 
     let attendance;
 
