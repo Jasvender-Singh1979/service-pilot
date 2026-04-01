@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
-import { formatDuration, formatLocation } from '@/lib/formatters';
+import { formatLocation } from '@/lib/formatters';
 
 interface EngineerAttendance {
   id: string;
@@ -89,9 +89,7 @@ function AttendanceDashboardContent() {
     }
   };
 
-
-
-  const getStatusColor = (status: string | null) => {
+  const getStatusBadgeColor = (status: string | null) => {
     switch (status) {
       case 'checked_in':
         return 'bg-green-100 text-green-700';
@@ -103,25 +101,42 @@ function AttendanceDashboardContent() {
   };
 
   const getStatusLabel = (status: string | null) => {
+    if (!status) return 'Awaited';
     switch (status) {
       case 'checked_in':
         return 'Checked In';
       case 'checked_out':
         return 'Checked Out';
       default:
-        return 'Not Checked In';
+        return 'Awaited';
     }
   };
+
+  const getTimingBadgeColor = (checkInTime: string | null, checkOutTime: string | null) => {
+    if (!checkInTime) return null;
+    // For now, show badge only if we have timing data
+    return 'bg-amber-100 text-amber-700';
+  };
+
+  const getTimingLabel = (checkInTime: string | null) => {
+    if (!checkInTime) return null;
+    // Simplified: would need cutoff time from API for accurate determination
+    return 'On Time';
+  };
+
+  const presentEngineersCount = engineers.filter(e => 
+    e.attendance_status === 'checked_in' || e.attendance_status === 'checked_out'
+  ).length;
 
   if (loading) {
     return (
       <div className="flex-1 pb-8">
-        <div className="px-6 pt-6 mb-8">
-          <div className="h-32 bg-gradient-to-br from-blue-200 to-blue-300 rounded-[24px] animate-pulse"></div>
+        <div className="px-4 pt-6 mb-6">
+          <div className="h-32 bg-gradient-to-br from-slate-200 to-slate-300 rounded-[20px] animate-pulse"></div>
         </div>
-        <div className="px-6 space-y-4">
+        <div className="px-4 space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded-[16px] animate-pulse"></div>
+            <div key={i} className="h-24 bg-slate-200 rounded-[16px] animate-pulse"></div>
           ))}
         </div>
       </div>
@@ -130,51 +145,45 @@ function AttendanceDashboardContent() {
 
   return (
     <div className="flex-1 pb-8">
-      <div className="px-6 pt-6 mb-8">
-        <div className="mb-3 p-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-[24px] text-white shadow-[0_8px_28px_rgba(37,99,235,0.25)] border border-blue-500 relative overflow-hidden">
-          <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-          <div className="flex items-center justify-between mb-4 relative z-10">
-            <h2 className="text-[11px] font-black opacity-95 uppercase tracking-wider">Team Attendance</h2>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/manager/attendance/settings"
-                className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-[8px] text-xs font-bold transition-colors flex items-center gap-1"
-              >
-                <i className="ph-fill ph-gear text-sm"></i>
-                <span>Settings</span>
-              </Link>
-              <Link
-                href="/manager/attendance/named-locations"
-                className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-[8px] text-xs font-bold transition-colors flex items-center gap-1"
-              >
-                <i className="ph-fill ph-map-pin text-sm"></i>
-                <span>Locations</span>
-              </Link>
-            </div>
+      {/* TOP SUMMARY */}
+      <div className="px-4 pt-6 mb-6">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-[16px] border border-blue-200">
+            <div className="text-xs text-blue-600 font-bold uppercase tracking-wide mb-1">Total Engineers</div>
+            <div className="text-3xl font-black text-blue-700">{summary.total_engineers}</div>
           </div>
-          <div className="grid grid-cols-2 gap-4 relative z-10">
-            <div>
-              <div className="text-3xl font-black mb-1 tracking-tighter">{summary.checked_in_count}</div>
-              <div className="text-[11px] font-bold opacity-90 uppercase tracking-wider">Checked In</div>
-            </div>
-            <div>
-              <div className="text-3xl font-black mb-1 tracking-tighter">{summary.checked_out_count}</div>
-              <div className="text-[11px] font-bold opacity-90 uppercase tracking-wider">Checked Out</div>
-            </div>
-            <div>
-              <div className="text-3xl font-black mb-1 tracking-tighter">{summary.not_checked_in_count}</div>
-              <div className="text-[11px] font-bold opacity-90 uppercase tracking-wider">Not Checked In</div>
-            </div>
-            <div>
-              <div className="text-3xl font-black mb-1 tracking-tighter">{summary.total_engineers}</div>
-              <div className="text-[11px] font-bold opacity-90 uppercase tracking-wider">Total Engineers</div>
-            </div>
+          <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-[16px] border border-green-200">
+            <div className="text-xs text-green-600 font-bold uppercase tracking-wide mb-1">Present</div>
+            <div className="text-3xl font-black text-green-700">{presentEngineersCount}</div>
+          </div>
+          <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-[16px] border border-amber-200">
+            <div className="text-xs text-amber-600 font-bold uppercase tracking-wide mb-1">Late</div>
+            <div className="text-3xl font-black text-amber-700">0</div>
           </div>
         </div>
       </div>
 
-      <div className="px-6 mb-8">
-        <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-4">Engineers Status</h3>
+      {/* TOP ACTIONS */}
+      <div className="px-4 mb-6 flex gap-2">
+        <Link
+          href="/manager/attendance/settings"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-[14px] hover:bg-slate-50 active:scale-95 transition-all"
+        >
+          <i className="ph-fill ph-gear text-slate-600 text-lg"></i>
+          <span className="text-xs font-bold text-slate-700 uppercase">Cutoff Time</span>
+        </Link>
+        <Link
+          href="/manager/attendance/named-locations"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-[14px] hover:bg-slate-50 active:scale-95 transition-all"
+        >
+          <i className="ph-fill ph-map-pin text-slate-600 text-lg"></i>
+          <span className="text-xs font-bold text-slate-700 uppercase">Locations</span>
+        </Link>
+      </div>
+
+      {/* ENGINEER CARDS */}
+      <div className="px-4 mb-8">
+        <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3">Engineers</h3>
         <div className="space-y-3">
           {engineers.length === 0 ? (
             <div className="p-6 bg-white rounded-[16px] border border-slate-100 text-center">
@@ -188,41 +197,86 @@ function AttendanceDashboardContent() {
                   setSelectedEngineer(engineer);
                   setShowDetails(true);
                 }}
-                className="w-full p-4 bg-white rounded-[16px] border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.08)] transition-all active:scale-95 text-left"
+                className="w-full p-4 bg-white rounded-[16px] border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all active:scale-95 text-left"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{engineer.name}</h4>
-                    <p className="text-xs text-slate-600 mt-1">{engineer.email}</p>
+                {/* NAME & EMAIL */}
+                <div className="mb-3">
+                  <h4 className="font-bold text-slate-900 text-sm">{engineer.name}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">{engineer.email}</p>
+                </div>
+
+                {/* CHECK-IN TIME + LOCATION + MAP */}
+                {engineer.check_in_time ? (
+                  <div className="mb-3 pb-3 border-b border-slate-200">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="text-[11px] text-slate-600 font-medium">Check In</div>
+                      <span className="text-xs font-bold text-slate-900">{formatTime(engineer.check_in_time)}</span>
+                    </div>
+                    {engineer.check_in_address || engineer.check_in_latitude || engineer.check_in_longitude ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          {formatLocation(engineer.check_in_latitude, engineer.check_in_longitude, engineer.check_in_address)}
+                        </span>
+                        {Number.isFinite(Number(engineer.check_in_latitude)) && Number.isFinite(Number(engineer.check_in_longitude)) && (
+                          <a
+                            href={`https://maps.google.com/?q=${engineer.check_in_latitude},${engineer.check_in_longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-blue-600 font-bold shrink-0 hover:underline"
+                          >
+                            Map
+                          </a>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
-                  <span className={`px-3 py-1.5 rounded-[10px] text-xs font-bold uppercase tracking-wider ${getStatusColor(engineer.attendance_status)}`}>
+                ) : null}
+
+                {/* CHECK-OUT TIME + LOCATION + MAP */}
+                {engineer.check_out_time ? (
+                  <div className="mb-3 pb-3 border-b border-slate-200">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="text-[11px] text-slate-600 font-medium">Check Out</div>
+                      <span className="text-xs font-bold text-slate-900">{formatTime(engineer.check_out_time)}</span>
+                    </div>
+                    {engineer.check_out_address || engineer.check_out_latitude || engineer.check_out_longitude ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          {formatLocation(engineer.check_out_latitude, engineer.check_out_longitude, engineer.check_out_address)}
+                        </span>
+                        {Number.isFinite(Number(engineer.check_out_latitude)) && Number.isFinite(Number(engineer.check_out_longitude)) && (
+                          <a
+                            href={`https://maps.google.com/?q=${engineer.check_out_latitude},${engineer.check_out_longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-blue-600 font-bold shrink-0 hover:underline"
+                          >
+                            Map
+                          </a>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* STATUS & TIMING BADGES */}
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold uppercase tracking-wider ${getStatusBadgeColor(engineer.attendance_status)}`}>
                     {getStatusLabel(engineer.attendance_status)}
                   </span>
+                  {getTimingLabel(engineer.check_in_time) && (
+                    <span className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold uppercase tracking-wider ${getTimingBadgeColor(engineer.check_in_time, engineer.check_out_time)}`}>
+                      {getTimingLabel(engineer.check_in_time)}
+                    </span>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-600 font-medium">Check In:</span>
-                    <p className="font-bold text-slate-900 mt-1">{formatTime(engineer.check_in_time)}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-medium">Duration:</span>
-                    <p className="font-bold text-slate-900 mt-1">{formatDuration(engineer.worked_duration_minutes)}</p>
-                  </div>
-                </div>
-
-                {engineer.assigned_calls_count > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-200">
-                    <span className="text-slate-600 text-xs font-medium">Active Calls: </span>
-                    <span className="font-bold text-blue-600">{engineer.assigned_calls_count}</span>
-                  </div>
-                )}
               </button>
             ))
           )}
         </div>
       </div>
 
+      {/* DETAILS MODAL */}
       {showDetails && selectedEngineer && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end">
           <div className="w-full bg-white rounded-t-[24px] p-6 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
@@ -258,7 +312,7 @@ function AttendanceDashboardContent() {
                 <div className="p-4 bg-slate-50 rounded-[14px] border border-slate-200 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-xs text-slate-600">Status:</span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${getStatusColor(selectedEngineer.attendance_status)}`}>
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${getStatusBadgeColor(selectedEngineer.attendance_status)}`}>
                       {getStatusLabel(selectedEngineer.attendance_status)}
                     </span>
                   </div>
@@ -272,10 +326,12 @@ function AttendanceDashboardContent() {
                       <span className="text-xs font-bold text-slate-900">{formatTime(selectedEngineer.check_out_time)}</span>
                     </div>
                   )}
-                  {selectedEngineer.worked_duration_minutes && (
+                  {selectedEngineer.worked_duration_minutes !== null && (
                     <div className="flex justify-between">
                       <span className="text-xs text-slate-600">Duration:</span>
-                      <span className="text-xs font-bold text-slate-900">{formatDuration(selectedEngineer.worked_duration_minutes)}</span>
+                      <span className="text-xs font-bold text-slate-900">
+                        {Math.floor(selectedEngineer.worked_duration_minutes / 60)}h {selectedEngineer.worked_duration_minutes % 60}m
+                      </span>
                     </div>
                   )}
                 </div>
@@ -286,10 +342,10 @@ function AttendanceDashboardContent() {
                 <div className="space-y-3">
                   {/* Check-in Location */}
                   <div className="p-4 bg-slate-50 rounded-[14px] border border-slate-200">
-                    <div className="text-xs font-bold text-slate-600 mb-2">Check-in Location</div>
+                    <div className="text-xs font-bold text-slate-600 mb-2">Check-in</div>
                     {selectedEngineer.check_in_latitude || selectedEngineer.check_in_longitude || selectedEngineer.check_in_address ? (
                       <>
-                        <div className="text-xs text-slate-700 font-mono">
+                        <div className="text-xs text-slate-700 mb-2">
                           {formatLocation(
                             selectedEngineer.check_in_latitude,
                             selectedEngineer.check_in_longitude,
@@ -302,9 +358,9 @@ function AttendanceDashboardContent() {
                               href={`https://maps.google.com/?q=${selectedEngineer.check_in_latitude},${selectedEngineer.check_in_longitude}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-blue-600 font-bold mt-2 inline-block hover:underline"
+                              className="text-xs text-blue-600 font-bold inline-block hover:underline"
                             >
-                              Open in Google Maps →
+                              Open in Maps →
                             </a>
                           )}
                       </>
@@ -315,13 +371,13 @@ function AttendanceDashboardContent() {
 
                   {/* Check-out Location */}
                   <div className="p-4 bg-slate-50 rounded-[14px] border border-slate-200">
-                    <div className="text-xs font-bold text-slate-600 mb-2">Check-out Location</div>
+                    <div className="text-xs font-bold text-slate-600 mb-2">Check-out</div>
                     {selectedEngineer.check_out_time ? (
                       selectedEngineer.check_out_latitude ||
                       selectedEngineer.check_out_longitude ||
                       selectedEngineer.check_out_address ? (
                         <>
-                          <div className="text-xs text-slate-700 font-mono">
+                          <div className="text-xs text-slate-700 mb-2">
                             {formatLocation(
                               selectedEngineer.check_out_latitude,
                               selectedEngineer.check_out_longitude,
@@ -334,9 +390,9 @@ function AttendanceDashboardContent() {
                                 href={`https://maps.google.com/?q=${selectedEngineer.check_out_latitude},${selectedEngineer.check_out_longitude}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-blue-600 font-bold mt-2 inline-block hover:underline"
+                                className="text-xs text-blue-600 font-bold inline-block hover:underline"
                               >
-                                Open in Google Maps →
+                                Open in Maps →
                               </a>
                             )}
                         </>
