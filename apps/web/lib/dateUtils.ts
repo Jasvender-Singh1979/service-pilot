@@ -18,11 +18,15 @@ const TIMEZONE = 'Asia/Kolkata';
  * Get current time as seen in IST timezone
  * Returns a Date object representing the current moment in IST
  * This is used internally for calculations - NOT for DB storage
+ * 
+ * Uses a safer approach: extract year, month, day, hour, minute, second separately
+ * and construct a proper Date object without parsing locale strings
  */
 function getNowIST(): Date {
-  // Get current UTC time and convert to IST string
   const utcDate = new Date();
-  const istDateString = utcDate.toLocaleString('en-US', { 
+  
+  // Extract components using Intl.DateTimeFormat for reliable timezone conversion
+  const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: TIMEZONE,
     year: 'numeric',
     month: '2-digit',
@@ -33,20 +37,73 @@ function getNowIST(): Date {
     hour12: false
   });
   
-  // Parse back to Date (this will be in UTC offset, but represents IST time)
-  return new Date(istDateString);
+  const parts = formatter.formatToParts(utcDate);
+  const values: { [key: string]: string } = {};
+  
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  const year = parseInt(values.year, 10);
+  const month = parseInt(values.month, 10);
+  const day = parseInt(values.day, 10);
+  const hour = parseInt(values.hour, 10);
+  const minute = parseInt(values.minute, 10);
+  const second = parseInt(values.second, 10);
+  
+  // Validate all values are numbers
+  if (
+    isNaN(year) || isNaN(month) || isNaN(day) ||
+    isNaN(hour) || isNaN(minute) || isNaN(second)
+  ) {
+    console.error('[getNowIST] Invalid date components:', { year, month, day, hour, minute, second });
+    // Fallback: return current UTC date (this shouldn't happen but prevents NaN-NaN-NaN)
+    return utcDate;
+  }
+  
+  // Construct a Date in UTC that represents the IST time
+  // This is a representation, not a direct UTC conversion
+  const istDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  
+  return istDate;
 }
 
 /**
  * Get today's date as YYYY-MM-DD string in IST timezone
  * Used for date range calculations
+ * 
+ * CRITICAL GUARD: Validates the result is never NaN-NaN-NaN
  */
 function getTodayDateStringIST(): string {
   const now = getNowIST();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  
+  const result = `${year}-${month}-${day}`;
+  
+  // Guard: Detect NaN-NaN-NaN pattern
+  if (result === 'NaN-NaN-NaN' || isNaN(year) || isNaN(parseInt(month, 10)) || isNaN(parseInt(day, 10))) {
+    console.error('[getTodayDateStringIST] CRITICAL: Date string construction failed', {
+      year,
+      month,
+      day,
+      result,
+      now,
+      nowString: now.toString(),
+      nowISO: now.toISOString(),
+    });
+    // Fallback to UTC today (should never reach here with fixed getNowIST)
+    const utcNow = new Date();
+    const fallbackYear = utcNow.getUTCFullYear();
+    const fallbackMonth = String(utcNow.getUTCMonth() + 1).padStart(2, '0');
+    const fallbackDay = String(utcNow.getUTCDate()).padStart(2, '0');
+    return `${fallbackYear}-${fallbackMonth}-${fallbackDay}`;
+  }
+  
+  return result;
 }
 
 /**

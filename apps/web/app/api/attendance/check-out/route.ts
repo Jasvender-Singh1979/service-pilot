@@ -31,6 +31,15 @@ export async function POST(request: Request) {
     const todayDate = getTodayIST();
     const nowIST = new Date().toISOString();
 
+    // Guard: Validate date string before SQL
+    if (todayDate === "NaN-NaN-NaN" || !todayDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(todayDate)) {
+      console.error("[ATTENDANCE_CHECKOUT_API] Invalid date string:", { todayDate });
+      return NextResponse.json(
+        { error: "Invalid date calculation", details: { todayDate } },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json() as CheckOutRequest;
     const { latitude, longitude, accuracy, address } = body;
 

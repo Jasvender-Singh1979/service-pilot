@@ -24,6 +24,15 @@ export async function GET(request: Request) {
     const businessId = user.business_id;
     const todayDate = getTodayIST();
 
+    // Guard: Validate date string before SQL
+    if (todayDate === "NaN-NaN-NaN" || !todayDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(todayDate)) {
+      console.error("[ATTENDANCE_TEAM_API] Invalid date string:", { todayDate });
+      return NextResponse.json(
+        { error: "Invalid date calculation", details: { todayDate } },
+        { status: 500 }
+      );
+    }
+
     // Fetch cutoff time for this business
     const settingsResult = await sql`
       SELECT checkin_cutoff_time
