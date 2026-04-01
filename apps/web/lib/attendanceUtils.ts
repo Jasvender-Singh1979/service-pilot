@@ -16,7 +16,7 @@ export function checkTimeliness(checkInISO: string, cutoffTime: string | null): 
   try {
     // Parse check-in time to IST
     const checkInDate = new Date(checkInISO);
-    const checkInHHMM = checkInDate.toLocaleString('en-US', {
+    const checkInHHMM = checkInDate.toLocaleTimeString('en-GB', {
       timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
