@@ -1,41 +1,7 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
-
-/**
- * GET /api/attendance/report
- * Manager API to fetch attendance report for a specific engineer within a date range.
- * Includes On Time / Late calculation based on manager-defined cutoff time.
- *
- * Query params:
- * - engineer_id: required
- * - start_date: YYYY-MM-DD (IST date)
- * - end_date: YYYY-MM-DD (IST date)
- */
-
-/**
- * Helper: Compare time (HH:MM) to cutoff in IST
- * Returns: "on_time", "late", or null if no cutoff configured
- */
-function checkTimeliness(checkInISO: string, cutoffTime: string | null): string | null {
-  if (!cutoffTime) return null;
-
-  try {
-    // Parse check-in time to IST
-    const checkInDate = new Date(checkInISO);
-    const checkInHHMM = checkInDate.toLocaleString('en-US', {
-      timeZone: 'Asia/Kolkata',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-
-    // Compare HH:MM strings (lexicographic works for 24-hour time)
-    return checkInHHMM <= cutoffTime ? 'on_time' : 'late';
-  } catch {
-    return null;
-  }
-}
+import { checkTimeliness } from "@/lib/attendanceUtils";
 
 export async function GET(request: Request) {
   try {
