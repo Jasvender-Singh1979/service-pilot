@@ -35,6 +35,12 @@ export async function GET(request: Request) {
         check_out_time,
         status,
         notes,
+        check_in_latitude,
+        check_in_longitude,
+        check_in_address,
+        check_out_latitude,
+        check_out_longitude,
+        check_out_address,
         created_at,
         updated_at
       FROM attendance
@@ -62,6 +68,12 @@ export async function GET(request: Request) {
       checkOutTime: record.check_out_time,
       attendanceDate: record.attendance_date,
       notes: record.notes,
+      checkInLatitude: record.check_in_latitude,
+      checkInLongitude: record.check_in_longitude,
+      checkInAddress: record.check_in_address,
+      checkOutLatitude: record.check_out_latitude,
+      checkOutLongitude: record.check_out_longitude,
+      checkOutAddress: record.check_out_address,
       createdAt: record.created_at,
       updatedAt: record.updated_at,
     });

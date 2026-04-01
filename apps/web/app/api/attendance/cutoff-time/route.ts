@@ -81,26 +81,63 @@ export async function POST(request: Request) {
       LIMIT 1
     `;
 
-    if (existing.length > 0) {
-      // Update existing
-      await sql`
-        UPDATE manager_attendance_settings
-        SET checkin_cutoff_time = ${cutoff_time}, updated_at = NOW()
-        WHERE business_id = ${businessId}
-      `;
-    } else {
-      // Create new
-      await sql`
-        INSERT INTO manager_attendance_settings (
-          id,
-          business_id,
-          checkin_cutoff_time
-        ) VALUES (
-          ${uuidv4()},
-          ${businessId},
-          ${cutoff_time}
-        )
-      `;
+    try {
+      if (existing.length > 0) {
+        // Update existing
+        const updateResult = await sql`
+          UPDATE manager_attendance_settings
+          SET checkin_cutoff_time = ${cutoff_time}, updated_at = NOW()
+          WHERE business_id = ${businessId}
+          RETURNING id, checkin_cutoff_time, updated_at
+        `;
+        console.log("[CUTOFF_TIME_UPDATE_SUCCESS]", {
+          businessId,
+          cutoff_time,
+          updated_at: updateResult[0]?.updated_at,
+        });
+      } else {
+        // Create new with explicit timestamps and manager_user_id
+        const insertResult = await sql`
+          INSERT INTO manager_attendance_settings (
+            id,
+            business_id,
+            manager_user_id,
+            checkin_cutoff_time,
+            created_at,
+            updated_at
+          ) VALUES (
+            ${uuidv4()},
+            ${businessId},
+            ${user.id},
+            ${cutoff_time},
+            NOW(),
+            NOW()
+          )
+          RETURNING id, checkin_cutoff_time, created_at, updated_at
+        `;
+        console.log("[CUTOFF_TIME_INSERT_SUCCESS]", {
+          id: insertResult[0]?.id,
+          businessId,
+          cutoff_time,
+          created_at: insertResult[0]?.created_at,
+          updated_at: insertResult[0]?.updated_at,
+        });
+      }
+    } catch (dbError) {
+      const dbErrorMessage = dbError instanceof Error ? dbError.message : String(dbError);
+      console.error("[CUTOFF_TIME_DB_ERROR]", {
+        businessId,
+        cutoff_time,
+        error: dbErrorMessage,
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+      });
+      return NextResponse.json(
+        {
+          error: "Database operation failed",
+          details: dbErrorMessage,
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -108,7 +145,14 @@ export async function POST(request: Request) {
       cutoff_time,
     });
   } catch (error) {
-    console.error("Error setting cutoff time:", error);
-    return NextResponse.json({ error: "Failed to set cutoff time" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("[CUTOFF_TIME_API_ERROR]", {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return NextResponse.json(
+      { error: "Failed to set cutoff time", details: errorMessage },
+      { status: 500 }
+    );
   }
 }

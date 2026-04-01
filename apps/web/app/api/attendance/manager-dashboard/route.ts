@@ -48,6 +48,9 @@ export async function GET(request: Request) {
           a.check_in_latitude,
           a.check_in_longitude,
           a.check_in_address,
+          a.check_out_latitude,
+          a.check_out_longitude,
+          a.check_out_address,
           COALESCE(
             (SELECT COUNT(*) FROM service_call 
               WHERE assigned_engineer_user_id = u.id 
@@ -78,6 +81,9 @@ export async function GET(request: Request) {
           a.check_in_latitude,
           a.check_in_longitude,
           a.check_in_address,
+          a.check_out_latitude,
+          a.check_out_longitude,
+          a.check_out_address,
           COALESCE(
             (SELECT COUNT(*) FROM service_call 
               WHERE assigned_engineer_user_id = u.id 
