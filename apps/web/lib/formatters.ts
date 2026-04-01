@@ -4,23 +4,23 @@
  */
 
 /**
- * Normalize coordinates to 2 decimal places for matching
- * Example: 29.950300 → 29.95, 77.546900 → 77.55
- * Used for friendly location matching to group nearby GPS readings
+ * Normalize coordinates to 3 decimal places for matching
+ * Example: 29.950286 → 29.950, 77.546938 → 77.547
+ * Used for friendly location matching to group nearby GPS readings (~100m tolerance)
  * 
  * @param value - latitude or longitude (number, string, null, or undefined)
- * @returns normalized value to 2 decimals as string, or null if invalid
+ * @returns normalized value to 3 decimals as string, or null if invalid
  */
 export function normalizeCoordinate(value: number | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   const num = Number(value);
   if (!Number.isFinite(num)) return null;
-  return num.toFixed(2);
+  return num.toFixed(3);
 }
 
 /**
  * Get a normalized coordinate key for matching
- * Example: latitude=29.950300, longitude=77.546900 → "29.95,77.55"
+ * Example: latitude=29.950286, longitude=77.546938 → "29.950,77.547"
  * 
  * @param lat - latitude (number, string, null, or undefined)
  * @param lng - longitude (number, string, null, or undefined)

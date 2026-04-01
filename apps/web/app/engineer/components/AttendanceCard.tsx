@@ -25,6 +25,9 @@ interface AttendanceRecord {
   check_in_latitude?: number | null;
   check_in_longitude?: number | null;
   check_in_address?: string | null;
+  check_out_latitude?: number | null;
+  check_out_longitude?: number | null;
+  check_out_address?: string | null;
 }
 
 export default function AttendanceCard() {
@@ -32,22 +35,38 @@ export default function AttendanceCard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
+  const [resolvedCheckInLocation, setResolvedCheckInLocation] = useState<string | null>(null);
+  const [resolvedCheckOutLocation, setResolvedCheckOutLocation] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAttendance();
   }, []);
 
-  // Resolve location to friendly name when attendance changes
+  // Resolve check-in location to friendly name when attendance changes
   useEffect(() => {
     if (attendance?.check_in_latitude || attendance?.check_in_longitude || attendance?.check_in_address) {
       formatLocationAsync(
         attendance.check_in_latitude,
         attendance.check_in_longitude,
         attendance.check_in_address
-      ).then(setResolvedLocation);
+      ).then(setResolvedCheckInLocation);
+    } else {
+      setResolvedCheckInLocation(null);
     }
   }, [attendance?.check_in_latitude, attendance?.check_in_longitude, attendance?.check_in_address]);
+
+  // Resolve check-out location to friendly name when attendance changes
+  useEffect(() => {
+    if (attendance?.check_out_latitude || attendance?.check_out_longitude || attendance?.check_out_address) {
+      formatLocationAsync(
+        attendance.check_out_latitude,
+        attendance.check_out_longitude,
+        attendance.check_out_address
+      ).then(setResolvedCheckOutLocation);
+    } else {
+      setResolvedCheckOutLocation(null);
+    }
+  }, [attendance?.check_out_latitude, attendance?.check_out_longitude, attendance?.check_out_address]);
 
   const fetchAttendance = async () => {
     try {
@@ -316,16 +335,57 @@ export default function AttendanceCard() {
           </div>
         )}
 
-        {/* Location Info (if available) */}
+        {/* Location Info - Check-in */}
         {attendance?.check_in_latitude || attendance?.check_in_longitude || attendance?.check_in_address ? (
-          <div className="mb-6 p-3 bg-slate-50 rounded-[12px] border border-slate-200">
+          <div className="mb-4 p-3 bg-slate-50 rounded-[12px] border border-slate-200">
             <div className="text-xs text-slate-600 font-bold mb-2 flex items-center gap-1">
-              <i className="ph-fill ph-map-pin text-sm text-slate-500"></i>
+              <i className="ph-fill ph-sign-in text-sm text-slate-500"></i>
               Check-in Location
             </div>
-            <div className="text-xs text-slate-700">
-              {resolvedLocation || formatLocation(attendance.check_in_latitude, attendance.check_in_longitude, attendance.check_in_address)}
+            <div className="text-xs text-slate-700 mb-2">
+              {resolvedCheckInLocation || formatLocation(attendance.check_in_latitude, attendance.check_in_longitude, attendance.check_in_address)}
             </div>
+            {Number.isFinite(Number(attendance.check_in_latitude)) &&
+              Number.isFinite(Number(attendance.check_in_longitude)) && (
+                <a
+                  href={`https://maps.google.com/?q=${attendance.check_in_latitude},${attendance.check_in_longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 font-bold hover:underline inline-block"
+                >
+                  Open in Google Maps →
+                </a>
+              )}
+          </div>
+        ) : null}
+
+        {/* Location Info - Check-out */}
+        {attendance?.check_out_time ? (
+          <div className="mb-6 p-3 bg-slate-50 rounded-[12px] border border-slate-200">
+            <div className="text-xs text-slate-600 font-bold mb-2 flex items-center gap-1">
+              <i className="ph-fill ph-sign-out text-sm text-slate-500"></i>
+              Check-out Location
+            </div>
+            {attendance?.check_out_latitude || attendance?.check_out_longitude || attendance?.check_out_address ? (
+              <>
+                <div className="text-xs text-slate-700 mb-2">
+                  {resolvedCheckOutLocation || formatLocation(attendance.check_out_latitude, attendance.check_out_longitude, attendance.check_out_address)}
+                </div>
+                {Number.isFinite(Number(attendance.check_out_latitude)) &&
+                  Number.isFinite(Number(attendance.check_out_longitude)) && (
+                    <a
+                      href={`https://maps.google.com/?q=${attendance.check_out_latitude},${attendance.check_out_longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 font-bold hover:underline inline-block"
+                    >
+                      Open in Google Maps →
+                    </a>
+                  )}
+              </>
+            ) : (
+              <div className="text-xs text-slate-600 italic">Location unavailable</div>
+            )}
           </div>
         ) : null}
 

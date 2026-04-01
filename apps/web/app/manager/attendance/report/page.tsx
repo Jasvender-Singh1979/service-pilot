@@ -31,12 +31,17 @@ interface AttendanceRecord {
   check_out_address: string | null;
   worked_duration_minutes: number | null;
   attendance_status: string;
+  status: string; // "Present", "Absent", "Invalid"
+  timeliness: string | null; // "on_time", "late", or null
 }
 
 interface Summary {
   total_days: number;
-  complete_days: number;
-  incomplete_days: number;
+  present_count: number;
+  absent_count: number;
+  invalid_count: number;
+  on_time_count: number;
+  late_count: number;
   total_worked_minutes: number;
 }
 
@@ -313,12 +318,48 @@ function AttendanceReportContent() {
                   </div>
                   <div className="p-4 bg-green-50 rounded-[10px] border border-green-200">
                     <div className="text-xs font-bold text-green-600 mb-1 uppercase tracking-wider">
-                      Complete
+                      Present
                     </div>
                     <div className="text-2xl font-black text-green-600">
-                      {summary.complete_days}
+                      {summary.present_count}
                     </div>
                   </div>
+                  <div className="p-4 bg-red-50 rounded-[10px] border border-red-200">
+                    <div className="text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">
+                      Absent
+                    </div>
+                    <div className="text-2xl font-black text-red-600">
+                      {summary.absent_count}
+                    </div>
+                  </div>
+                  <div className="p-4 bg-amber-50 rounded-[10px] border border-amber-200">
+                    <div className="text-xs font-bold text-amber-600 mb-1 uppercase tracking-wider">
+                      Invalid
+                    </div>
+                    <div className="text-2xl font-black text-amber-600">
+                      {summary.invalid_count}
+                    </div>
+                  </div>
+                  {summary.on_time_count > 0 && (
+                    <div className="p-4 bg-emerald-50 rounded-[10px] border border-emerald-200">
+                      <div className="text-xs font-bold text-emerald-600 mb-1 uppercase tracking-wider">
+                        On Time
+                      </div>
+                      <div className="text-2xl font-black text-emerald-600">
+                        {summary.on_time_count}
+                      </div>
+                    </div>
+                  )}
+                  {summary.late_count > 0 && (
+                    <div className="p-4 bg-orange-50 rounded-[10px] border border-orange-200">
+                      <div className="text-xs font-bold text-orange-600 mb-1 uppercase tracking-wider">
+                        Late
+                      </div>
+                      <div className="text-2xl font-black text-orange-600">
+                        {summary.late_count}
+                      </div>
+                    </div>
+                  )}
                   <div className="p-4 bg-blue-50 rounded-[10px] border border-blue-200">
                     <div className="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wider">
                       Total Hours
@@ -332,7 +373,7 @@ function AttendanceReportContent() {
                       Avg/Day
                     </div>
                     <div className="text-2xl font-black text-blue-600">
-                      {formatDuration(summary.total_days > 0 && summary.total_worked_minutes ? summary.total_worked_minutes / summary.total_days : 0)}
+                      {formatDuration(summary.present_count > 0 && summary.total_worked_minutes ? summary.total_worked_minutes / summary.present_count : 0)}
                     </div>
                   </div>
                 </div>
@@ -357,6 +398,8 @@ function AttendanceReportContent() {
                         <th className="p-2 text-left font-bold text-slate-900">Check In</th>
                         <th className="p-2 text-left font-bold text-slate-900">Check Out</th>
                         <th className="p-2 text-left font-bold text-slate-900">Duration</th>
+                        <th className="p-2 text-left font-bold text-slate-900">Status</th>
+                        <th className="p-2 text-left font-bold text-slate-900">Time</th>
                         <th className="p-2 text-left font-bold text-slate-900">Location</th>
                       </tr>
                     </thead>
@@ -367,16 +410,57 @@ function AttendanceReportContent() {
                             {formatDate(record.attendance_date)}
                           </td>
                           <td className="p-2 text-slate-900">{formatTime(record.check_in_time)}</td>
-                          <td className="p-2 text-slate-900">{formatTime(record.check_out_time)}</td>
+                          <td className="p-2 text-slate-900">
+                            {formatTime(record.check_out_time) || "Not checked out"}
+                          </td>
                           <td className="p-2 font-bold text-slate-900">
                             {formatDuration(record.worked_duration_minutes)}
                           </td>
-                          <td className="p-2 text-slate-600 font-mono text-[10px]">
-                            {formatLocation(
-                              record.check_in_latitude,
-                              record.check_in_longitude,
-                              record.check_in_address
+                          <td className="p-2 font-bold">
+                            <span
+                              className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                record.status === "Present"
+                                  ? "bg-green-100 text-green-700"
+                                  : record.status === "Absent"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-amber-100 text-amber-700"
+                              }`}
+                            >
+                              {record.status}
+                            </span>
+                          </td>
+                          <td className="p-2 font-bold">
+                            {record.timeliness ? (
+                              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                record.timeliness === "on_time"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-orange-100 text-orange-700"
+                              }`}>
+                                {record.timeliness === "on_time" ? "On Time" : "Late"}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">--</span>
                             )}
+                          </td>
+                          <td className="p-2 text-slate-600 font-mono text-[10px]">
+                            <div>
+                              <strong>In:</strong> {formatLocation(
+                                record.check_in_latitude,
+                                record.check_in_longitude,
+                                record.check_in_address
+                              )}
+                            </div>
+                            <div className="mt-1">
+                              <strong>Out:</strong> {
+                                record.check_out_time
+                                  ? formatLocation(
+                                      record.check_out_latitude,
+                                      record.check_out_longitude,
+                                      record.check_out_address
+                                    )
+                                  : "Not checked out"
+                              }
+                            </div>
                           </td>
                         </tr>
                       ))}

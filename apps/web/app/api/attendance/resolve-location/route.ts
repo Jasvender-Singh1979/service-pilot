@@ -4,8 +4,8 @@ import { getSessionUserFromRequest } from "@/lib/auth-utils";
 
 /**
  * Resolve a location to its friendly name if a named location matches
- * Uses normalized 2-decimal coordinate matching (approximately 50-1000 meter tolerance)
- * Example: 29.950300 and 29.951000 both normalize to 29.95 and will match
+ * Uses normalized 3-decimal coordinate matching (approximately 100m tolerance)
+ * Example: 29.950286 and 29.950500 both normalize to 29.950 and will match
  */
 export async function POST(request: Request) {
   try {
@@ -30,22 +30,22 @@ export async function POST(request: Request) {
       });
     }
 
-    // Check if coordinates match any named location using normalized 2-decimal coordinates
+    // Check if coordinates match any named location using normalized 3-decimal coordinates
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       const lat = Number(latitude);
       const lng = Number(longitude);
 
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        // Normalize coordinates to 2 decimal places for matching
-        const normalizedLat = Number(lat.toFixed(2));
-        const normalizedLng = Number(lng.toFixed(2));
+        // Normalize coordinates to 3 decimal places for matching
+        const normalizedLat = Number(lat.toFixed(3));
+        const normalizedLng = Number(lng.toFixed(3));
 
         const matchedLocation = await sql`
           SELECT location_name
           FROM named_location
           WHERE business_id = ${businessId}
-            AND ROUND(latitude::numeric, 2) = ${normalizedLat}
-            AND ROUND(longitude::numeric, 2) = ${normalizedLng}
+            AND ROUND(latitude::numeric, 3) = ${normalizedLat}
+            AND ROUND(longitude::numeric, 3) = ${normalizedLng}
           LIMIT 1
         `;
 

@@ -5,12 +5,38 @@ import { getSessionUserFromRequest } from "@/lib/auth-utils";
 /**
  * GET /api/attendance/report
  * Manager API to fetch attendance report for a specific engineer within a date range.
+ * Includes On Time / Late calculation based on manager-defined cutoff time.
  *
  * Query params:
  * - engineer_id: required
  * - start_date: YYYY-MM-DD (IST date)
  * - end_date: YYYY-MM-DD (IST date)
  */
+
+/**
+ * Helper: Compare time (HH:MM) to cutoff in IST
+ * Returns: "on_time", "late", or null if no cutoff configured
+ */
+function checkTimeliness(checkInISO: string, cutoffTime: string | null): string | null {
+  if (!cutoffTime) return null;
+
+  try {
+    // Parse check-in time to IST
+    const checkInDate = new Date(checkInISO);
+    const checkInHHMM = checkInDate.toLocaleString('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    // Compare HH:MM strings (lexicographic works for 24-hour time)
+    return checkInHHMM <= cutoffTime ? 'on_time' : 'late';
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const user = await getSessionUserFromRequest();
@@ -40,6 +66,15 @@ export async function GET(request: Request) {
     }
 
     const businessId = user.business_id;
+
+    // Fetch cutoff time for this business
+    const settingsResult = await sql`
+      SELECT checkin_cutoff_time
+      FROM manager_attendance_settings
+      WHERE business_id = ${businessId}
+      LIMIT 1
+    `;
+    const cutoffTime = settingsResult.length > 0 ? settingsResult[0].checkin_cutoff_time : null;
 
     // Fetch engineer details
     const engineer = await sql`
@@ -80,24 +115,72 @@ export async function GET(request: Request) {
       ORDER BY attendance_date DESC
     `;
 
-    // Calculate summary
+    // Derive attendance status from check-in/check-out
+    // RULES for status (from selected date range):
+    // 1. No check-in for a day => ABSENT
+    // 2. Check-in exists but no check-out => INVALID (incomplete)
+    // 3. Both check-in & check-out on same day => PRESENT
+    // On Time / Late applies only to PRESENT records, based on cutoff time
+    const recordsWithStatus = records.map((r: any) => {
+      const status = !r.check_in_time
+        ? "Absent"
+        : !r.check_out_time
+          ? "Invalid"
+          : "Present";
+
+      // Calculate timeliness for PRESENT records only
+      let timeliness: string | null = null;
+      if (status === "Present" && r.check_in_time) {
+        timeliness = checkTimeliness(r.check_in_time, cutoffTime);
+      }
+
+      return {
+        ...r,
+        status,
+        timeliness, // "on_time", "late", or null if no cutoff
+      };
+    });
+
+    // Calculate summary from selected date range
+    const presentCount = recordsWithStatus.filter(
+      (r: any) => r.status === "Present"
+    ).length;
+    const absentCount = recordsWithStatus.filter(
+      (r: any) => r.status === "Absent"
+    ).length;
+    const invalidCount = recordsWithStatus.filter(
+      (r: any) => r.status === "Invalid"
+    ).length;
+    const onTimeCount = recordsWithStatus.filter(
+      (r: any) => r.timeliness === "on_time"
+    ).length;
+    const lateCount = recordsWithStatus.filter(
+      (r: any) => r.timeliness === "late"
+    ).length;
+    const totalWorkedMinutes = recordsWithStatus.reduce(
+      (sum: number, r: any) => sum + (r.worked_duration_minutes || 0),
+      0
+    );
+
+    // Total days = actual number of days in the selected date range (not just records with entries)
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    const dayDiffTime = Math.abs(endDateObj.getTime() - startDateObj.getTime());
+    const totalDaysInRange = Math.ceil(dayDiffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+
     const summary = {
-      total_days: records.length,
-      complete_days: records.filter(
-        (r: any) => r.attendance_status === "complete"
-      ).length,
-      incomplete_days: records.filter(
-        (r: any) => r.attendance_status === "incomplete"
-      ).length,
-      total_worked_minutes: records.reduce(
-        (sum: number, r: any) => sum + (r.worked_duration_minutes || 0),
-        0
-      ),
+      total_days: totalDaysInRange, // Total days in the selected range
+      present_count: presentCount, // Days with check-in AND check-out
+      absent_count: absentCount,   // Days with NO check-in
+      invalid_count: invalidCount, // Days with check-in but NO check-out
+      on_time_count: onTimeCount,  // Present days where check-in was on or before cutoff
+      late_count: lateCount,       // Present days where check-in was after cutoff
+      total_worked_minutes: totalWorkedMinutes, // Sum of worked_duration_minutes for all Present days
     };
 
     return NextResponse.json({
       engineer: engineerData,
-      records,
+      records: recordsWithStatus,
       summary,
       date_range: {
         start: startDate,

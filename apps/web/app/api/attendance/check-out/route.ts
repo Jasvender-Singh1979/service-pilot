@@ -59,10 +59,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate check-out is after check-in
+    // RULE: Enforce same-day check-out
     const checkInTime = new Date(record.check_in_time);
     const checkOutTime = new Date(nowIST);
 
+    // Validate check-in and check-out are on the same calendar day (IST)
+    const checkInDate = checkInTime.toLocaleString('en-US', { 
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const checkOutDate = checkOutTime.toLocaleString('en-US', { 
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+
+    if (checkInDate !== checkOutDate) {
+      return NextResponse.json(
+        { error: "Cannot check out on a different day. Check out must be on the same day as check-in." },
+        { status: 400 }
+      );
+    }
+
+    // Validate check-out is after check-in
     if (checkOutTime <= checkInTime) {
       return NextResponse.json(
         { error: "Check-out time must be after check-in time" },
