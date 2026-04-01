@@ -1,6 +1,5 @@
 'use client';
 
-// Cache bust - fixed safe formatters
 import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ManagerLayout from '@/app/components/ManagerLayout';
@@ -10,7 +9,7 @@ import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { formatDuration, formatLocation } from '@/lib/formatters';
+import { formatLocationAsync } from '@/lib/formatters';
 
 interface EngineerInfo {
   id: string;
@@ -39,10 +38,14 @@ interface Summary {
   total_days: number;
   present_count: number;
   absent_count: number;
-  invalid_count: number;
+  invalid_count?: number;
   on_time_count: number;
   late_count: number;
-  total_worked_minutes: number;
+  total_worked_minutes?: number;
+}
+
+interface ResolvedLocation {
+  [key: string]: string;
 }
 
 function AttendanceReportContent() {
@@ -61,6 +64,7 @@ function AttendanceReportContent() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [resolvedLocations, setResolvedLocations] = useState<ResolvedLocation>({});
 
   // Fetch engineers on load
   useEffect(() => {
@@ -110,6 +114,9 @@ function AttendanceReportContent() {
       setEngineer(data.engineer);
       setRecords(data.records);
       setSummary(data.summary);
+      
+      // Resolve locations asynchronously
+      resolveLocations(data.records);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Error fetching report:', errorMessage);
@@ -117,6 +124,34 @@ function AttendanceReportContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resolveLocations = async (attendanceRecords: AttendanceRecord[]) => {
+    const locations: ResolvedLocation = {};
+    
+    for (const record of attendanceRecords) {
+      // Resolve check-in location
+      if (record.check_in_latitude && record.check_in_longitude) {
+        const checkInKey = `checkin-${record.attendance_date}`;
+        locations[checkInKey] = await formatLocationAsync(
+          record.check_in_latitude,
+          record.check_in_longitude,
+          record.check_in_address
+        );
+      }
+      
+      // Resolve check-out location
+      if (record.check_out_time && record.check_out_latitude && record.check_out_longitude) {
+        const checkOutKey = `checkout-${record.attendance_date}`;
+        locations[checkOutKey] = await formatLocationAsync(
+          record.check_out_latitude,
+          record.check_out_longitude,
+          record.check_out_address
+        );
+      }
+    }
+    
+    setResolvedLocations(locations);
   };
 
   const formatTime = (isoString: string | null) => {
@@ -307,7 +342,7 @@ function AttendanceReportContent() {
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
                   Summary
                 </h3>
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="p-4 bg-slate-50 rounded-[10px] border border-slate-200">
                     <div className="text-xs font-bold text-slate-600 mb-1 uppercase tracking-wider">
                       Total Days
@@ -332,56 +367,28 @@ function AttendanceReportContent() {
                       {summary.absent_count}
                     </div>
                   </div>
-                  <div className="p-4 bg-amber-50 rounded-[10px] border border-amber-200">
-                    <div className="text-xs font-bold text-amber-600 mb-1 uppercase tracking-wider">
-                      Invalid
+                  <div className="p-4 bg-emerald-50 rounded-[10px] border border-emerald-200">
+                    <div className="text-xs font-bold text-emerald-600 mb-1 uppercase tracking-wider">
+                      On Time
                     </div>
-                    <div className="text-2xl font-black text-amber-600">
-                      {summary.invalid_count}
-                    </div>
-                  </div>
-                  {summary.on_time_count > 0 && (
-                    <div className="p-4 bg-emerald-50 rounded-[10px] border border-emerald-200">
-                      <div className="text-xs font-bold text-emerald-600 mb-1 uppercase tracking-wider">
-                        On Time
-                      </div>
-                      <div className="text-2xl font-black text-emerald-600">
-                        {summary.on_time_count}
-                      </div>
-                    </div>
-                  )}
-                  {summary.late_count > 0 && (
-                    <div className="p-4 bg-orange-50 rounded-[10px] border border-orange-200">
-                      <div className="text-xs font-bold text-orange-600 mb-1 uppercase tracking-wider">
-                        Late
-                      </div>
-                      <div className="text-2xl font-black text-orange-600">
-                        {summary.late_count}
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-4 bg-blue-50 rounded-[10px] border border-blue-200">
-                    <div className="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wider">
-                      Total Hours
-                    </div>
-                    <div className="text-2xl font-black text-blue-600">
-                      {formatDuration(summary.total_worked_minutes)}
+                    <div className="text-2xl font-black text-emerald-600">
+                      {summary.on_time_count}
                     </div>
                   </div>
-                  <div className="p-4 bg-blue-50 rounded-[10px] border border-blue-200">
-                    <div className="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wider">
-                      Avg/Day
+                  <div className="p-4 bg-orange-50 rounded-[10px] border border-orange-200">
+                    <div className="text-xs font-bold text-orange-600 mb-1 uppercase tracking-wider">
+                      Late
                     </div>
-                    <div className="text-2xl font-black text-blue-600">
-                      {formatDuration(summary.present_count > 0 && summary.total_worked_minutes ? summary.total_worked_minutes / summary.present_count : 0)}
+                    <div className="text-2xl font-black text-orange-600">
+                      {summary.late_count}
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Records Table */}
-            <div className="mb-4">
+            {/* Daily Records Cards */}
+            <div>
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
                 Daily Records
               </h3>
@@ -390,82 +397,92 @@ function AttendanceReportContent() {
                   <p className="text-sm text-slate-600">No attendance records found</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b-2 border-slate-300">
-                        <th className="p-2 text-left font-bold text-slate-900">Date</th>
-                        <th className="p-2 text-left font-bold text-slate-900">Check In</th>
-                        <th className="p-2 text-left font-bold text-slate-900">Check Out</th>
-                        <th className="p-2 text-left font-bold text-slate-900">Duration</th>
-                        <th className="p-2 text-left font-bold text-slate-900">Status</th>
-                        <th className="p-2 text-left font-bold text-slate-900">Time</th>
-                        <th className="p-2 text-left font-bold text-slate-900">Location</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {records.map((record) => (
-                        <tr key={record.attendance_date} className="border-b border-slate-200">
-                          <td className="p-2 text-slate-900 font-medium">
-                            {formatDate(record.attendance_date)}
-                          </td>
-                          <td className="p-2 text-slate-900">{formatTime(record.check_in_time)}</td>
-                          <td className="p-2 text-slate-900">
-                            {formatTime(record.check_out_time) || "Not checked out"}
-                          </td>
-                          <td className="p-2 font-bold text-slate-900">
-                            {formatDuration(record.worked_duration_minutes)}
-                          </td>
-                          <td className="p-2 font-bold">
-                            <span
-                              className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                record.status === "Present"
-                                  ? "bg-green-100 text-green-700"
-                                  : record.status === "Absent"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {record.status}
-                            </span>
-                          </td>
-                          <td className="p-2 font-bold">
-                            {record.timeliness ? (
-                              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                record.timeliness === "on_time"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-orange-100 text-orange-700"
-                              }`}>
-                                {record.timeliness === "on_time" ? "On Time" : "Late"}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-[10px]">--</span>
-                            )}
-                          </td>
-                          <td className="p-2 text-slate-600 font-mono text-[10px]">
+                <div className="space-y-3">
+                  {records.map((record) => {
+                    const checkInKey = `checkin-${record.attendance_date}`;
+                    const checkOutKey = `checkout-${record.attendance_date}`;
+                    const checkInLoc = resolvedLocations[checkInKey] || 'Resolving...';
+                    const checkOutLoc = resolvedLocations[checkOutKey] || 'Resolving...';
+                    
+                    return (
+                      <div key={record.attendance_date} className="p-4 bg-white rounded-[10px] border border-slate-200 space-y-3">
+                        {/* Date */}
+                        <div className="font-bold text-slate-900">
+                          {formatDate(record.attendance_date)}
+                        </div>
+                        
+                        {/* Check In */}
+                        <div className="text-sm space-y-1">
+                          <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">Check In</div>
+                          <div className="flex items-start justify-between">
                             <div>
-                              <strong>In:</strong> {formatLocation(
-                                record.check_in_latitude,
-                                record.check_in_longitude,
-                                record.check_in_address
+                              <div className="font-bold text-slate-900">{formatTime(record.check_in_time)}</div>
+                              <div className="text-xs text-slate-600 mt-1">{checkInLoc}</div>
+                            </div>
+                            {record.check_in_latitude && record.check_in_longitude && (
+                              <a
+                                href={`https://maps.google.com/?q=${record.check_in_latitude},${record.check_in_longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 text-blue-500 hover:text-blue-600 transition-colors"
+                                title="Open in Google Maps"
+                              >
+                                <i className="ph-fill ph-map-pin text-lg"></i>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Check Out */}
+                        {record.check_out_time && (
+                          <div className="text-sm space-y-1 pt-2 border-t border-slate-200">
+                            <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">Check Out</div>
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="font-bold text-slate-900">{formatTime(record.check_out_time)}</div>
+                                <div className="text-xs text-slate-600 mt-1">{checkOutLoc}</div>
+                              </div>
+                              {record.check_out_latitude && record.check_out_longitude && (
+                                <a
+                                  href={`https://maps.google.com/?q=${record.check_out_latitude},${record.check_out_longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 text-blue-500 hover:text-blue-600 transition-colors"
+                                  title="Open in Google Maps"
+                                >
+                                  <i className="ph-fill ph-map-pin text-lg"></i>
+                                </a>
                               )}
                             </div>
-                            <div className="mt-1">
-                              <strong>Out:</strong> {
-                                record.check_out_time
-                                  ? formatLocation(
-                                      record.check_out_latitude,
-                                      record.check_out_longitude,
-                                      record.check_out_address
-                                    )
-                                  : "Not checked out"
-                              }
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                        )}
+                        
+                        {/* Status & Timing */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                          <span
+                            className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              record.status === "Present"
+                                ? "bg-green-100 text-green-700"
+                                : record.status === "Absent"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {record.status}
+                          </span>
+                          {record.timeliness && (
+                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              record.timeliness === "on_time"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-orange-100 text-orange-700"
+                            }`}>
+                              {record.timeliness === "on_time" ? "On Time" : "Late"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
