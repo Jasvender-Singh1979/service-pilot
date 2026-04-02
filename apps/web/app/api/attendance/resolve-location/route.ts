@@ -1,11 +1,26 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
+import { normalizeCoordinate } from "@/lib/formatters";
 
 /**
- * Resolve a location to its friendly name if a named location matches
- * Uses normalized 3-decimal coordinate matching (approximately 100m tolerance)
- * Example: 29.950286 and 29.950500 both normalize to 29.950 and will match
+ * API: Resolve a location to its friendly name if a named location matches
+ * 
+ * Uses SHARED normalization (normalizeCoordinate from lib/formatters):
+ * - Attendance coordinates normalized to 3 decimals
+ * - Named location coordinates also normalized to 3 decimals
+ * - Compared as strings to avoid numeric precision issues
+ * 
+ * Matching priority:
+ * 1. Named location (if normalized coords match saved location)
+ * 2. Raw coordinates (full 6-decimal precision)
+ * 3. Address string
+ * 4. N/A
+ * 
+ * Example: 
+ * - Saved location: 29.936400, 77.540500 → "Home"
+ * - Check-in 1:     29.936394, 77.540477 → "29.936", "77.540" → matches "Home"
+ * - Check-in 2:     29.936393, 77.540487 → "29.936", "77.540" → matches "Home"
  */
 export async function POST(request: Request) {
   try {
@@ -21,36 +36,39 @@ export async function POST(request: Request) {
 
     const { latitude, longitude, address } = await request.json();
 
-    // REQUIRED PRIORITY: named location → coordinates → address → N/A
-    // Check if coordinates match any named location using normalized 3-decimal coordinates
-    // Note: latitude and longitude might come as strings from the database, so convert to numbers
+    // Convert coordinates to numbers
     const lat = latitude !== null && latitude !== undefined ? Number(latitude) : null;
     const lng = longitude !== null && longitude !== undefined ? Number(longitude) : null;
 
+    // Try to match against named locations using SHARED normalization
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      // Normalize coordinates to 3 decimal places for matching
-      const normalizedLat = Number(lat.toFixed(3));
-      const normalizedLng = Number(lng.toFixed(3));
+      // Use shared normalizer: converts to string like "29.936" (3 decimal places)
+      const normalizedLat = normalizeCoordinate(lat);
+      const normalizedLng = normalizeCoordinate(lng);
 
-      const matchedLocation = await sql`
-        SELECT location_name
-        FROM named_location
-        WHERE business_id = ${businessId}
-          AND ROUND(latitude::numeric, 3) = ${normalizedLat}
-          AND ROUND(longitude::numeric, 3) = ${normalizedLng}
-        LIMIT 1
-      `;
+      if (normalizedLat && normalizedLng) {
+        // Query named locations: round their coords to 3 decimals and compare
+        // CRITICAL: Using ROUND in SQL to normalize saved locations same way
+        const matchedLocation = await sql`
+          SELECT location_name
+          FROM named_location
+          WHERE business_id = ${businessId}
+            AND TO_CHAR(ROUND(latitude::numeric, 3), 'FM9.000') = ${normalizedLat}
+            AND TO_CHAR(ROUND(longitude::numeric, 3), 'FM9.000') = ${normalizedLng}
+          LIMIT 1
+        `;
 
-      if (matchedLocation && matchedLocation.length > 0) {
-        return NextResponse.json({
-          type: 'named_location',
-          value: matchedLocation[0].location_name,
-          matched: true,
-          coordinates: { latitude: lat, longitude: lng },
-        });
+        if (matchedLocation && matchedLocation.length > 0) {
+          return NextResponse.json({
+            type: 'named_location',
+            value: matchedLocation[0].location_name,
+            matched: true,
+            coordinates: { latitude: lat, longitude: lng },
+          });
+        }
       }
 
-      // No named location match found, return coordinates
+      // No named location match found, return full-precision coordinates
       const coordValue = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
       return NextResponse.json({
         type: 'coordinates',

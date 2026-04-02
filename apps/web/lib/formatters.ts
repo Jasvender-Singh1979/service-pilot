@@ -4,12 +4,17 @@
  */
 
 /**
- * Normalize coordinates to 3 decimal places for matching
- * Example: 29.950286 → 29.950, 77.546938 → 77.547
- * Used for friendly location matching to group nearby GPS readings (~100m tolerance)
+ * SHARED HELPER: Normalize a single coordinate to 3 decimal places for matching
+ * Example: 29.950286 → "29.950", 77.546938 → "77.547"
+ * 
+ * Used for consistent location matching across check-in, check-out, and named locations.
+ * Tolerance: ~100 meters at equator
+ * 
+ * CRITICAL: Must be used on BOTH attendance coordinates AND named location coordinates
+ * to ensure consistent matching behavior.
  * 
  * @param value - latitude or longitude (number, string, null, or undefined)
- * @returns normalized value to 3 decimals as string, or null if invalid
+ * @returns normalized coordinate as string with exactly 3 decimals, or null if invalid
  */
 export function normalizeCoordinate(value: number | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
