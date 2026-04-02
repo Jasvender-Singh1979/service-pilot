@@ -4,8 +4,8 @@ import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import {
   getTodayIST,
   getTodayRangeIST,
-  getWeekRangeIST,
-  getMonthRangeIST,
+  getThisWeekRangeIST,
+  getThisMonthRangeIST,
   getCustomRangeIST
 } from "@/lib/dateUtils";
 
@@ -62,14 +62,14 @@ export async function GET(request: Request) {
       };
       console.log('[ENGINEER_DASHBOARD_FILTER] Filter: today', { startDate: dateRange.startDate, endDate: dateRange.endDate });
     } else if (filter === 'this_week') {
-      const range = getWeekRangeIST();
+      const range = getThisWeekRangeIST();
       dateRange = {
         startDate: range.start.toISOString(),
         endDate: range.end.toISOString()
       };
       console.log('[ENGINEER_DASHBOARD_FILTER] Filter: this_week', { startDate: dateRange.startDate, endDate: dateRange.endDate });
     } else if (filter === 'this_month') {
-      const range = getMonthRangeIST();
+      const range = getThisMonthRangeIST();
       dateRange = {
         startDate: range.start.toISOString(),
         endDate: range.end.toISOString()

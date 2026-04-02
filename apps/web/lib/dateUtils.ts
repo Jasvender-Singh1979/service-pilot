@@ -168,6 +168,31 @@ export function getTodayRangeIST(): { start: Date; end: Date } {
  * Get this week's date range (last 7 calendar days) in IST, converted to UTC
  * Returns: { start, end } where start is 6 days ago (7 days inclusive) and end is today
  */
+export function getThisWeekRangeIST(): { start: Date; end: Date } {
+  const nowIST = getNowIST();
+  
+  // Calculate 6 days ago
+  const sixDaysAgo = new Date(nowIST);
+  sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+  
+  // Format as date strings
+  const startString = `${sixDaysAgo.getFullYear()}-${String(sixDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(sixDaysAgo.getDate()).padStart(2, '0')}`;
+  const endString = getTodayDateStringIST();
+  
+  // Get UTC range for start date
+  const startRange = istDateStringToUTCRange(startString);
+  // Get UTC range for end date
+  const endRange = istDateStringToUTCRange(endString);
+  
+  return {
+    start: startRange.start,
+    end: endRange.end
+  };
+}
+
+/**
+ * Alias for getThisWeekRangeIST() for backwards compatibility
+ */
 export function getWeekRangeIST(): { start: Date; end: Date } {
   const nowIST = getNowIST();
   
@@ -193,6 +218,31 @@ export function getWeekRangeIST(): { start: Date; end: Date } {
 /**
  * Get this month's date range (last 30 calendar days) in IST, converted to UTC
  * Returns: { start, end } where start is 29 days ago (30 days inclusive) and end is today
+ */
+export function getThisMonthRangeIST(): { start: Date; end: Date } {
+  const nowIST = getNowIST();
+  
+  // Calculate 29 days ago
+  const twentyNineDaysAgo = new Date(nowIST);
+  twentyNineDaysAgo.setDate(twentyNineDaysAgo.getDate() - 29);
+  
+  // Format as date strings
+  const startString = `${twentyNineDaysAgo.getFullYear()}-${String(twentyNineDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(twentyNineDaysAgo.getDate()).padStart(2, '0')}`;
+  const endString = getTodayDateStringIST();
+  
+  // Get UTC range for start date
+  const startRange = istDateStringToUTCRange(startString);
+  // Get UTC range for end date
+  const endRange = istDateStringToUTCRange(endString);
+  
+  return {
+    start: startRange.start,
+    end: endRange.end
+  };
+}
+
+/**
+ * Alias for getThisMonthRangeIST() for backwards compatibility
  */
 export function getMonthRangeIST(): { start: Date; end: Date } {
   const nowIST = getNowIST();
@@ -300,6 +350,64 @@ export function browserDateToISTDate(browserDateString: string): string {
 }
 
 /**
+ * Check if two UTC timestamps represent the same calendar day in IST
+ * Used for validating same-day check-in/check-out
+ */
+export function isSameDayIST(date1: Date, date2: Date): boolean {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  
+  const date1Parts = formatter.format(date1);
+  const date2Parts = formatter.format(date2);
+  
+  return date1Parts === date2Parts;
+}
+
+/**
+ * Get today's date as YYYY-MM-DD string in IST (alias for getTodayDateStringIST)
+ */
+export function getTodayISTDateString(): string {
+  return getTodayDateStringIST();
+}
+
+/**
+ * Get today's date range (start and end of day) in IST, converted to UTC (alias)
+ */
+export function getTodayRangeISTFormatted(): { startDate: string; endDate: string } {
+  const range = getTodayRangeIST();
+  return {
+    startDate: range.start.toISOString(),
+    endDate: range.end.toISOString()
+  };
+}
+
+/**
+ * Get this week's date range formatted as ISO strings (alias)
+ */
+export function getThisWeekRangeISTFormatted(): { startDate: string; endDate: string } {
+  const range = getThisWeekRangeIST();
+  return {
+    startDate: range.start.toISOString(),
+    endDate: range.end.toISOString()
+  };
+}
+
+/**
+ * Get this month's date range formatted as ISO strings (alias)
+ */
+export function getThisMonthRangeISTFormatted(): { startDate: string; endDate: string } {
+  const range = getThisMonthRangeIST();
+  return {
+    startDate: range.start.toISOString(),
+    endDate: range.end.toISOString()
+  };
+}
+
+/**
  * Debug info - shows timezone information for troubleshooting
  */
 export function getTimezoneDebugInfo() {
@@ -309,7 +417,7 @@ export function getTimezoneDebugInfo() {
     nowIST: getNowAsIST(),
     todayIST: getTodayIST(),
     todayRange: getTodayRangeIST(),
-    weekRange: getWeekRangeIST(),
-    monthRange: getMonthRangeIST()
+    weekRange: getThisWeekRangeIST(),
+    monthRange: getThisMonthRangeIST()
   };
 }

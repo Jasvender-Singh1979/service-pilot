@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import {
   getTodayRangeIST,
-  getWeekRangeIST,
-  getMonthRangeIST,
+  getThisWeekRangeIST,
+  getThisMonthRangeIST,
   getCustomRangeIST,
   getTimezoneDebugInfo
 } from "@/lib/dateUtils";
@@ -19,13 +19,13 @@ function getDateRange(filter: string) {
       return { startDate: start, endDate: end };
     }
     case "this_week": {
-      const range = getWeekRangeIST();
+      const range = getThisWeekRangeIST();
       const start = range.start.toISOString().split('T')[0];
       const end = range.end.toISOString().split('T')[0];
       return { startDate: start, endDate: end };
     }
     case "this_month": {
-      const range = getMonthRangeIST();
+      const range = getThisMonthRangeIST();
       const start = range.start.toISOString().split('T')[0];
       const end = range.end.toISOString().split('T')[0];
       return { startDate: start, endDate: end };

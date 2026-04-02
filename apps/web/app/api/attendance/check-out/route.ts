@@ -1,8 +1,7 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
-import { getTodayIST } from "@/lib/dateUtils";
-import { isSameDayIST } from "@/lib/istDateHelper";
+import { getTodayIST, isSameDayIST } from "@/lib/dateUtils";
 
 interface CheckOutRequest {
   latitude?: number;
