@@ -2,7 +2,7 @@ import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { checkTimeliness } from "@/lib/attendanceUtils";
-import { getCustomRangeIST } from "@/lib/dateUtils";
+import { getDateRangeIST } from "@/lib/istDateHelper";
 
 export async function GET(request: Request) {
   try {
@@ -185,10 +185,8 @@ export async function GET(request: Request) {
     );
 
     // Total days = actual number of days in the selected date range (not just records with entries)
-    const startDateObj = new Date(startDate);
-    const endDateObj = new Date(endDate);
-    const dayDiffTime = Math.abs(endDateObj.getTime() - startDateObj.getTime());
-    const totalDaysInRange = Math.ceil(dayDiffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+    // Use safe IST date range calculation
+    const { totalDays: totalDaysInRange } = getDateRangeIST(startDate, endDate);
 
     const summary = {
       total_days: totalDaysInRange, // Total days in the selected range

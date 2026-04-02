@@ -2,6 +2,7 @@ import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { getTodayIST } from "@/lib/dateUtils";
+import { isSameDayIST } from "@/lib/istDateHelper";
 
 interface CheckOutRequest {
   latitude?: number;
@@ -68,25 +69,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // RULE: Enforce same-day check-out
+    // RULE: Enforce same-day check-out (using safe IST date comparison)
     const checkInTime = new Date(record.check_in_time);
     const checkOutTime = new Date(nowIST);
 
     // Validate check-in and check-out are on the same calendar day (IST)
-    const checkInDate = checkInTime.toLocaleString('en-US', { 
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const checkOutDate = checkOutTime.toLocaleString('en-US', { 
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-
-    if (checkInDate !== checkOutDate) {
+    if (!isSameDayIST(checkInTime, checkOutTime)) {
       return NextResponse.json(
         { error: "Cannot check out on a different day. Check out must be on the same day as check-in." },
         { status: 400 }
