@@ -54,30 +54,13 @@ interface ResolvedLocation {
  * Uses IST timezone to ensure dates match attendance_date column in database
  */
 function getISTDateNDaysAgo(daysAgo: number): string {
-  // Get current time in IST
-  const now = new Date();
-  const istFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  // Get today's IST date, then subtract N days
+  const today = getTodayIST(); // Returns YYYY-MM-DD in IST
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
   
-  const parts = istFormatter.formatToParts(now);
-  const values: { [key: string]: string } = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
-  
-  const year = parseInt(values.year, 10);
-  const month = parseInt(values.month, 10);
-  const day = parseInt(values.day, 10);
-  
-  // Create a date N days ago using UTC manipulation
-  // (This works because we're just manipulating days, not crossing DST boundaries)
-  const dateObj = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  // Create a Date object representing today in UTC
+  const dateObj = new Date(Date.UTC(todayYear, todayMonth - 1, todayDay, 0, 0, 0));
+  // Subtract N days
   dateObj.setDate(dateObj.getDate() - daysAgo);
   
   const resultYear = dateObj.getUTCFullYear();

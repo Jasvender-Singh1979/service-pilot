@@ -72,9 +72,11 @@ export async function GET(request: Request) {
       `;
     } else if (fromDate && toDate) {
       // Date range filter - use IST timezone boundaries for consistent filtering
-      const nextDay = new Date(toDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const nextDayStr = nextDay.toISOString().split('T')[0];
+      // CRITICAL: Parse as IST date, not browser/UTC date
+      const [endYear, endMonth, endDay] = toDate.split('-').map(Number);
+      const nextDayDate = new Date(Date.UTC(endYear, endMonth - 1, endDay, 0, 0, 0));
+      nextDayDate.setDate(nextDayDate.getDate() + 1);
+      const nextDayStr = `${nextDayDate.getUTCFullYear()}-${String(nextDayDate.getUTCMonth() + 1).padStart(2, '0')}-${String(nextDayDate.getUTCDate()).padStart(2, '0')}`;
       
       calls = await sql`
         SELECT 
