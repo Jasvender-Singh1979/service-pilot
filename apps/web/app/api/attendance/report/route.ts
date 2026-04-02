@@ -135,7 +135,7 @@ export async function GET(request: Request) {
       endDate,
       recordCount: records.length,
       records: records,
-    });"
+    });
 
     // Derive attendance status from check-in/check-out
     // RULES for status (from selected date range):

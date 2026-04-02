@@ -74,18 +74,35 @@ export function formatDateTimeIST(utcDate: Date): string {
 /**
  * Check if a check-in time (UTC ISO string) is on time or late based on cutoff (HH:MM in IST)
  * 
- * @param checkInUTCISO - ISO string of check-in timestamp (UTC)
+ * @param checkInUTCISO - ISO string of check-in timestamp (UTC) or Date object
  * @param cutoffTimeIST - Cutoff time in HH:MM format (24-hour, IST timezone)
- * @returns "on_time", "late", or null if no cutoff configured
+ * @returns "on_time", "late", or null if no cutoff configured or invalid input
  */
 export function checkTimeliness(
-  checkInUTCISO: string,
+  checkInUTCISO: string | Date | null,
   cutoffTimeIST: string | null
 ): string | null {
-  if (!cutoffTimeIST) return null;
+  if (!cutoffTimeIST || !checkInUTCISO) return null;
 
   try {
-    const checkInDate = new Date(checkInUTCISO);
+    let checkInDate: Date;
+    
+    // Handle both string ISO format and Date objects
+    if (typeof checkInUTCISO === 'string') {
+      checkInDate = new Date(checkInUTCISO);
+    } else if (checkInUTCISO instanceof Date) {
+      checkInDate = checkInUTCISO;
+    } else {
+      console.error('[checkTimeliness] Invalid check-in input type:', typeof checkInUTCISO);
+      return null;
+    }
+    
+    // Validate the date is valid
+    if (isNaN(checkInDate.getTime())) {
+      console.error('[checkTimeliness] Invalid date:', checkInUTCISO);
+      return null;
+    }
+    
     const { hours, minutes } = getTimeComponentsIST(checkInDate);
     const checkInTimeIST = `${hours}:${minutes}`;
 
@@ -94,7 +111,7 @@ export function checkTimeliness(
     // "10:15" <= "10:00" → false (late)
     return checkInTimeIST <= cutoffTimeIST ? 'on_time' : 'late';
   } catch (error) {
-    console.error('[checkTimeliness] Error:', error);
+    console.error('[checkTimeliness] Error:', error, 'Input:', checkInUTCISO);
     return null;
   }
 }

@@ -2,7 +2,7 @@ import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 import { getTodayIST } from "@/lib/dateUtils";
-import { checkTimeliness } from "@/lib/attendanceUtils";
+import { checkTimeliness } from "@/lib/istDateHelper";
 
 export async function GET(request: Request) {
   try {
@@ -23,6 +23,15 @@ export async function GET(request: Request) {
     const managerId = user.role === "super_admin" ? null : user.id;
     const businessId = user.business_id;
     const todayDate = getTodayIST();
+
+    // Guard: Validate business_id exists
+    if (!businessId) {
+      console.error("[ATTENDANCE_TEAM_API] No business_id on user:", { userId: user.id, role: user.role });
+      return NextResponse.json(
+        { error: "User has no business assigned" },
+        { status: 400 }
+      );
+    }
 
     // Guard: Validate date string before SQL
     if (todayDate === "NaN-NaN-NaN" || !todayDate || !/^\d{4}-\d{2}-\d{2}$/.test(todayDate)) {
@@ -163,9 +172,10 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("[ATTENDANCE_TEAM_API]", errorMessage);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error("[ATTENDANCE_TEAM_API] ERROR:", { errorMessage, errorStack, error });
     return NextResponse.json(
-      { error: "Failed to fetch team attendance" },
+      { error: "Failed to fetch team attendance", details: errorMessage },
       { status: 500 }
     );
   }
