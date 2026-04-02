@@ -6,29 +6,28 @@ import {
   getThisWeekRangeIST,
   getThisMonthRangeIST,
   getCustomRangeIST,
-  getTimezoneDebugInfo
+  getTimezoneDebugInfo,
+  getTodayDateStringIST,
+  getThisWeekRangeISTDateStrings,
+  getThisMonthRangeISTDateStrings
 } from "@/lib/dateUtils";
 
 // Helper to get date range based on filter (timezone-aware)
+// BUG FIX #1: Do NOT use toISOString().split('T')[0] - this converts IST to UTC incorrectly
+// Instead, use IST-aware date string generation functions
 function getDateRange(filter: string) {
   switch (filter) {
     case "today": {
-      const range = getTodayRangeIST();
-      const start = range.start.toISOString().split('T')[0];
-      const end = range.end.toISOString().split('T')[0];
-      return { startDate: start, endDate: end };
+      const today = getTodayDateStringIST();
+      return { startDate: today, endDate: today };
     }
     case "this_week": {
-      const range = getThisWeekRangeIST();
-      const start = range.start.toISOString().split('T')[0];
-      const end = range.end.toISOString().split('T')[0];
-      return { startDate: start, endDate: end };
+      const range = getThisWeekRangeISTDateStrings();
+      return { startDate: range.startDate, endDate: range.endDate };
     }
     case "this_month": {
-      const range = getThisMonthRangeIST();
-      const start = range.start.toISOString().split('T')[0];
-      const end = range.end.toISOString().split('T')[0];
-      return { startDate: start, endDate: end };
+      const range = getThisMonthRangeISTDateStrings();
+      return { startDate: range.startDate, endDate: range.endDate };
     }
     case "all_time":
     default:
@@ -83,12 +82,17 @@ export async function GET(request: Request) {
     
     console.log("REPORTS_PARAMS_RECEIVED:", { filterType, startDate, endDate, selectedManagerId });
     
-    // If a preset filter is selected, calculate dates using timezone
-    if (filterType !== "custom" && filterType !== "all_time") {
+    // CRITICAL FIX: Do NOT recalculate dates on the API side!
+    // The frontend has already calculated IST-aware dates and sent them as startDate/endDate params.
+    // We must use those dates, not recalculate them (which would use server time zone).
+    // If dates are missing (shouldn't happen), use the getDateRange fallback only for debugging.
+    if (!startDate || !endDate) {
       const dateRange = getDateRange(filterType);
-      startDate = dateRange.startDate;
-      endDate = dateRange.endDate;
-      console.log("REPORTS_FILTER_PRESET_APPLIED:", { filterType, calculated_startDate: startDate, calculated_endDate: endDate });
+      startDate = dateRange.startDate || startDate;
+      endDate = dateRange.endDate || endDate;
+      console.log("REPORTS_DATES_MISSING_FALLBACK:", { filterType, fallback_startDate: startDate, fallback_endDate: endDate });
+    } else {
+      console.log("REPORTS_USING_FRONTEND_DATES:", { filterType, startDate, endDate });
     }
     
     // For Super Admin manager-split mode, use the selected manager instead of all data
@@ -225,6 +229,7 @@ export async function GET(request: Request) {
       
       // 2. SNAPSHOT COUNTS (as of END of range)
       // These are current statuses for calls that were created by end-of-range date
+      // BUG FIX #2: Add startDate filter to snapshot queries (was only using endDate)
       try {
         let snapshotQuery;
         if (hasDateFilter && managerFilterId) {
@@ -238,6 +243,7 @@ export async function GET(request: Request) {
             FROM service_call
             WHERE business_id = ${businessId}
             AND manager_user_id = ${managerFilterId}
+            AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
             AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
           `;
         } else if (hasDateFilter) {
@@ -250,6 +256,7 @@ export async function GET(request: Request) {
               COUNT(*) FILTER (WHERE call_status = 'pending_under_services') as under_services_count
             FROM service_call
             WHERE business_id = ${businessId}
+            AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
             AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
           `;
         } else if (managerFilterId) {
@@ -580,8 +587,8 @@ export async function GET(request: Request) {
               )::numeric as net_revenue
             FROM service_call
             WHERE business_id = ${businessId} AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
+            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
           `;
         } else {
           revenueBreakdownQuery = await sql`
@@ -607,110 +614,6 @@ export async function GET(request: Request) {
       console.error("REPORTS_REVENUE_QUERY_FAILED:", errMsg);
       if (err instanceof Error) console.error("Stack:", err.stack);
       revenueBreakdownQuery = [];
-    }
-      // Get monthly trend - revenue based on when calls CLOSED
-      let monthlyTrendQuery;
-      try {
-        console.log("REPORTS_MONTHLY_QUERY_START");
-        
-        const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
-        
-        if (managerFilterId) {
-          // Scoped to a specific manager's monthly trend
-          if (hasDateFilter) {
-            monthlyTrendQuery = await sql`
-              SELECT
-                DATE_TRUNC('month', sc.created_at)::date as month,
-                COUNT(DISTINCT sc.id) as total_calls,
-                COALESCE(
-                  SUM(
-                    CASE WHEN sc.call_status = 'closed' AND (sc.closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (sc.closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
-                    THEN COALESCE(sc.final_service_amount, 0) + COALESCE(sc.final_material_amount, 0) - COALESCE(sc.final_discount_amount, 0)
-                    ELSE 0
-                    END
-                  ),
-                  0
-                )::numeric as total_revenue
-              FROM service_call sc
-              WHERE sc.business_id = ${businessId}
-              AND sc.manager_user_id = ${managerFilterId}
-              AND DATE(sc.created_at) >= ${startDate}::date
-              AND DATE(sc.created_at) <= ${endDate}::date
-              GROUP BY DATE_TRUNC('month', sc.created_at)
-              ORDER BY month DESC
-            `;
-        } else {
-          monthlyTrendQuery = await sql`
-            SELECT
-              DATE_TRUNC('month', sc.created_at)::date as month,
-              COUNT(DISTINCT sc.id) as total_calls,
-              COALESCE(
-                SUM(
-                  CASE WHEN sc.call_status = 'closed'
-                  THEN COALESCE(sc.final_service_amount, 0) + COALESCE(sc.final_material_amount, 0) - COALESCE(sc.final_discount_amount, 0)
-                  ELSE 0
-                  END
-                ),
-                0
-              )::numeric as total_revenue
-            FROM service_call sc
-            WHERE sc.business_id = ${businessId}
-            AND sc.manager_user_id = ${managerFilterId}
-            GROUP BY DATE_TRUNC('month', sc.created_at)
-            ORDER BY month DESC
-          `;
-        }
-        } else {
-          // Super Admin: all calls' monthly trend (combined mode)
-          if (hasDateFilter) {
-            monthlyTrendQuery = await sql`
-            SELECT
-              DATE_TRUNC('month', sc.created_at)::date as month,
-              COUNT(DISTINCT sc.id) as total_calls,
-              COALESCE(
-                SUM(
-                  CASE WHEN sc.call_status = 'closed' AND (sc.closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (sc.closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
-                  THEN COALESCE(sc.final_service_amount, 0) + COALESCE(sc.final_material_amount, 0) - COALESCE(sc.final_discount_amount, 0)
-                  ELSE 0
-                  END
-                ),
-                0
-              )::numeric as total_revenue
-            FROM service_call sc
-            WHERE sc.business_id = ${businessId}
-            AND DATE(sc.created_at) >= ${startDate}::date
-            AND DATE(sc.created_at) <= ${endDate}::date
-            GROUP BY DATE_TRUNC('month', sc.created_at)
-            ORDER BY month DESC
-            `;
-        } else {
-          monthlyTrendQuery = await sql`
-            SELECT
-              DATE_TRUNC('month', sc.created_at)::date as month,
-              COUNT(DISTINCT sc.id) as total_calls,
-              COALESCE(
-                SUM(
-                  CASE WHEN sc.call_status = 'closed'
-                  THEN COALESCE(sc.final_service_amount, 0) + COALESCE(sc.final_material_amount, 0) - COALESCE(sc.final_discount_amount, 0)
-                  ELSE 0
-                  END
-                ),
-                0
-              )::numeric as total_revenue
-            FROM service_call sc
-            WHERE sc.business_id = ${businessId}
-            GROUP BY DATE_TRUNC('month', sc.created_at)
-            ORDER BY month DESC
-          `;
-        }
-      }
-      
-      console.log("REPORTS_MONTHLY_QUERY_SUCCESS", { rows: monthlyTrendQuery?.length || 0 });
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error("REPORTS_MONTHLY_QUERY_FAILED:", errMsg);
-      if (err instanceof Error) console.error("Stack:", err.stack);
-      monthlyTrendQuery = [];
     }
 
     // Get Trend section data (based on selected period, only closed calls)
@@ -802,84 +705,6 @@ export async function GET(request: Request) {
       if (err instanceof Error) console.error("Stack:", err.stack);
       trendQuery = [];
     }
-
-    // Get Manager Performance (Super Admin only, for individual/combined modes)
-    let managerPerformanceQuery;
-    try {
-      console.log("REPORTS_MANAGER_QUERY_START");
-      
-      if (userRole === "super_admin") {
-        if (effectiveManagerId) {
-          // In individual mode, just show that specific manager's performance
-          if (hasDateFilter) {
-            managerPerformanceQuery = await sql`
-              SELECT
-                u.id as manager_id,
-                u.name as manager_name,
-                COUNT(DISTINCT sc.id) FILTER (WHERE DATE(sc.created_at) >= ${startDate}::date AND DATE(sc.created_at) <= ${endDate}::date) as created_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'cancelled' AND DATE(sc.updated_at) >= ${startDate}::date AND DATE(sc.updated_at) <= ${endDate}::date) as cancelled_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'closed' AND (sc.closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (sc.closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as closed_during_range
-              FROM "user" u
-              LEFT JOIN service_call sc ON u.id = sc.manager_user_id AND sc.business_id = ${businessId}
-              WHERE u.business_id = ${businessId} AND u.id = ${effectiveManagerId} AND u.role = 'manager'
-              GROUP BY u.id, u.name
-            `;
-          } else {
-            managerPerformanceQuery = await sql`
-              SELECT
-                u.id as manager_id,
-                u.name as manager_name,
-                COUNT(DISTINCT sc.id) as created_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'cancelled') as cancelled_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'closed') as closed_during_range
-              FROM "user" u
-              LEFT JOIN service_call sc ON u.id = sc.manager_user_id AND sc.business_id = ${businessId}
-              WHERE u.business_id = ${businessId} AND u.id = ${effectiveManagerId} AND u.role = 'manager'
-              GROUP BY u.id, u.name
-            `;
-          }
-        } else {
-          // In combined mode, show all managers
-          if (hasDateFilter) {
-            managerPerformanceQuery = await sql`
-              SELECT
-                u.id as manager_id,
-                u.name as manager_name,
-                COUNT(DISTINCT sc.id) FILTER (WHERE DATE(sc.created_at) >= ${startDate}::date AND DATE(sc.created_at) <= ${endDate}::date) as created_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'cancelled' AND DATE(sc.updated_at) >= ${startDate}::date AND DATE(sc.updated_at) <= ${endDate}::date) as cancelled_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'closed' AND (sc.closure_timestamp AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (sc.closure_timestamp AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as closed_during_range
-              FROM "user" u
-              LEFT JOIN service_call sc ON u.id = sc.manager_user_id AND sc.business_id = ${businessId}
-              WHERE u.business_id = ${businessId} AND u.role = 'manager'
-              GROUP BY u.id, u.name
-              ORDER BY created_during_range DESC
-            `;
-          } else {
-            managerPerformanceQuery = await sql`
-              SELECT
-                u.id as manager_id,
-                u.name as manager_name,
-                COUNT(DISTINCT sc.id) as created_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'cancelled') as cancelled_during_range,
-                COUNT(DISTINCT sc.id) FILTER (WHERE sc.call_status = 'closed') as closed_during_range
-              FROM "user" u
-              LEFT JOIN service_call sc ON u.id = sc.manager_user_id AND sc.business_id = ${businessId}
-              WHERE u.business_id = ${businessId} AND u.role = 'manager'
-              GROUP BY u.id, u.name
-              ORDER BY created_during_range DESC
-            `;
-          }
-        }
-      }
-      
-      const managerCount = Array.isArray(managerPerformanceQuery) ? managerPerformanceQuery.length : 0;
-      console.log("REPORTS_MANAGER_QUERY_SUCCESS", { rows: managerCount });
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error("REPORTS_MANAGER_QUERY_FAILED:", errMsg);
-      if (err instanceof Error) console.error("Stack:", err.stack);
-      managerPerformanceQuery = [];
-    }
     
     console.log("REPORTS_BUILDING_RESPONSE");
 
@@ -947,14 +772,6 @@ export async function GET(request: Request) {
     safeRevenue.payment_pending = Math.max(0, safeRevenue.net_revenue - safeRevenue.payment_received);
     console.log("REPORTS_REVENUE_SAFE_DEFAULTS", safeRevenue);
 
-    const safeMonthlyTrend = Array.isArray(monthlyTrendQuery) ? monthlyTrendQuery.map(m => ({
-      month: m.month || '',
-      total_calls: Number(m.total_calls) || 0,
-      total_revenue: Number(m.total_revenue) || 0,
-    })) : [];
-    console.log("REPORTS_MONTHLY_SAFE_DEFAULTS", { count: safeMonthlyTrend.length });
-
-    // Safe Trend section data
     const safeTrend = trendQuery && trendQuery[0] ? {
       total_closed_calls: Number(trendQuery[0].total_closed_calls) || 0,
       total_revenue_from_closed: Number(trendQuery[0].total_revenue_from_closed) || 0,
@@ -968,69 +785,13 @@ export async function GET(request: Request) {
     };
     console.log("REPORTS_TREND_SAFE_DEFAULTS", safeTrend);
 
-    // Safe Manager Performance data (Super Admin only)
-    const safeManagers = Array.isArray(managerPerformanceQuery) ? managerPerformanceQuery.map(m => ({
-      manager_id: m.manager_id || '',
-      manager_name: m.manager_name || '',
-      created: Number(m.created_during_range) || 0,
-      cancelled: Number(m.cancelled_during_range) || 0,
-      closed: Number(m.closed_during_range) || 0,
-    })) : [];
-    console.log("REPORTS_MANAGERS_SAFE_DEFAULTS", { count: safeManagers.length });
-
-    // Get counts for debugging
-    let dateFilteredCallCount = 0;
-    let closedCallCount = 0;
-    if (hasDateFilter) {
-      try {
-        const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
-        let countQuery;
-        
-        if (managerFilterId) {
-          countQuery = await sql`
-            SELECT 
-              COUNT(*) as all_calls,
-              COUNT(*) FILTER (WHERE call_status = 'closed' AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as closed_calls
-            FROM service_call
-            WHERE business_id = ${businessId}
-            AND manager_user_id = ${managerFilterId}
-            AND DATE(created_at) >= ${startDate}::date
-            AND DATE(created_at) <= ${endDate}::date
-          `;
-        } else {
-          countQuery = await sql`
-            SELECT 
-              COUNT(*) as all_calls,
-              COUNT(*) FILTER (WHERE call_status = 'closed' AND (closure_timestamp AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (closure_timestamp AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as closed_calls
-            FROM service_call
-            WHERE business_id = ${businessId}
-            AND DATE(created_at) >= ${startDate}::date
-            AND DATE(created_at) <= ${endDate}::date
-          `;
-        }
-        
-        if (countQuery && countQuery[0]) {
-          dateFilteredCallCount = Number(countQuery[0].all_calls) || 0;
-          closedCallCount = Number(countQuery[0].closed_calls) || 0;
-        }
-      } catch (err) {
-        console.error("REPORTS_DEBUG_COUNT_ERROR:", err);
-      }
-    } else {
-      dateFilteredCallCount = safeSummary.created + safeSummary.unassigned + safeSummary.assigned + safeSummary.in_progress + safeSummary.action_required + safeSummary.under_services + safeSummary.closed + safeSummary.cancelled;
-      closedCallCount = safeSummary.closed;
-    }
-
     const finalResponse = {
       summary: safeSummary,
       engineerPerformance: safeEngineers,
-      managerPerformance: safeManagers,
       categoryPerformance: safeCategories,
       revenueBreakdown: safeRevenue,
       trend: safeTrend,
       trendPeriodLabel: filterType === 'today' ? 'Today' : filterType === 'this_week' ? 'This Week' : filterType === 'this_month' ? 'This Month' : `${startDate} to ${endDate}`,
-      monthlyTrend: safeMonthlyTrend,
-      // Temporary debug info for diagnosis
       debug: {
         timezone: tzInfo.timezone,
         current_time: tzInfo.localDateInTz,
@@ -1042,32 +803,6 @@ export async function GET(request: Request) {
         selected_filter: filterType,
         start_date: startDate,
         end_date: endDate,
-        // Event counts
-        created_event_count: safeSummary.created,
-        created_count: safeSummary.created,
-        cancelled_event_count: safeSummary.cancelled,
-        cancelled_count: safeSummary.cancelled,
-        closed_event_count: safeSummary.closed,
-        closed_count: safeSummary.closed,
-        // Snapshot counts
-        unassigned_snapshot_count: safeSummary.unassigned,
-        assigned_snapshot_count: safeSummary.assigned,
-        in_progress_snapshot_count: safeSummary.in_progress,
-        action_required_snapshot_count: safeSummary.action_required,
-        under_services_snapshot_count: safeSummary.under_services,
-        
-        snapshot_status_note: "Snapshot counts are as of end of selected date range",
-        // Other debug
-        date_filtered_call_count: dateFilteredCallCount,
-        engineer_linked_call_count: safeEngineers.reduce((sum, e) => sum + e.total_assigned, 0),
-        category_linked_call_count: safeCategories.reduce((sum, c) => sum + c.total_calls, 0),
-        // Revenue debug info
-        service_amount: safeRevenue.total_service_charges,
-        material_amount: safeRevenue.total_material_charges,
-        total_discounts: safeRevenue.total_discounts,
-        payment_pending: safeRevenue.payment_pending,
-        payment_received: safeRevenue.payment_received,
-        total_revenue: safeRevenue.net_revenue,
       }
     };
 
@@ -1075,7 +810,6 @@ export async function GET(request: Request) {
       summary: safeSummary,
       engineers: safeEngineers.length,
       categories: safeCategories.length,
-      monthlyTrends: safeMonthlyTrend.length,
     });
 
     return NextResponse.json(finalResponse);
@@ -1108,7 +842,6 @@ export async function GET(request: Request) {
         payment_received: 0,
         net_revenue: 0,
       },
-      monthlyTrend: [],
     }, { status: 200 });
   }
 }
