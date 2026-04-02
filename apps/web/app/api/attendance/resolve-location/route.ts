@@ -48,13 +48,13 @@ export async function POST(request: Request) {
 
       if (normalizedLat && normalizedLng) {
         // Query named locations: round their coords to 3 decimals and compare
-        // CRITICAL: Using ROUND in SQL to normalize saved locations same way
+        // CRITICAL: Cast to text to match JavaScript toFixed(3) format exactly
         const matchedLocation = await sql`
           SELECT location_name
           FROM named_location
           WHERE business_id = ${businessId}
-            AND TO_CHAR(ROUND(latitude::numeric, 3), 'FM9.000') = ${normalizedLat}
-            AND TO_CHAR(ROUND(longitude::numeric, 3), 'FM9.000') = ${normalizedLng}
+            AND ROUND(latitude::numeric, 3)::text = ${normalizedLat}
+            AND ROUND(longitude::numeric, 3)::text = ${normalizedLng}
           LIMIT 1
         `;
 
