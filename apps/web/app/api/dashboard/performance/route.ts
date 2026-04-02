@@ -1,7 +1,6 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
-import { getTodayRange } from "@/lib/timezone";
-import { format } from "date-fns";
+import { getTodayRangeIST } from "@/lib/dateUtils";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
 
 const defaultResponse = {
@@ -36,10 +35,10 @@ export async function GET() {
     const businessId = user.business_id;
     const managerId = user.id;
 
-    // Get today's date in Asia/Kolkata timezone
-    const todayRange = getTodayRange();
-    const todayStartDate = format(todayRange.start, "yyyy-MM-dd");
-    const todayEndDate = format(todayRange.end, "yyyy-MM-dd");
+    // Get today's date range in IST (Asia/Kolkata) - using same helper as /api/reports
+    const todayRange = getTodayRangeIST();
+    const todayStartUTC = todayRange.start;
+    const todayEndUTC = todayRange.end;
 
     // 1. Calls Created Today
     let callsCreatedToday = 0;
@@ -48,8 +47,8 @@ export async function GET() {
         SELECT COUNT(*) as count FROM service_call
         WHERE manager_user_id = ${managerId}
         AND business_id = ${businessId}
-        AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${todayStartDate}::date
-        AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${todayEndDate}::date
+        AND created_at >= ${todayStartUTC}
+        AND created_at <= ${todayEndUTC}
       `;
       if (result && result[0]) {
         callsCreatedToday = parseInt(String(result[0].count)) || 0;
@@ -66,8 +65,8 @@ export async function GET() {
         WHERE manager_user_id = ${managerId}
         AND business_id = ${businessId}
         AND call_status = 'closed'
-        AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${todayStartDate}::date
-        AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${todayEndDate}::date
+        AND closure_timestamp >= ${todayStartUTC}
+        AND closure_timestamp <= ${todayEndUTC}
       `;
       if (result && result[0]) {
         callsClosedToday = parseInt(String(result[0].count)) || 0;
@@ -100,8 +99,8 @@ export async function GET() {
         WHERE manager_user_id = ${managerId}
         AND business_id = ${businessId}
         AND call_status = 'cancelled'
-        AND (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${todayStartDate}::date
-        AND (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${todayEndDate}::date
+        AND updated_at >= ${todayStartUTC}
+        AND updated_at <= ${todayEndUTC}
       `;
       if (result && result[0]) {
         callsCancelledToday = parseInt(String(result[0].count)) || 0;

@@ -13,8 +13,6 @@ import {
 } from "@/lib/dateUtils";
 
 // Helper to get date range based on filter (timezone-aware)
-// BUG FIX #1: Do NOT use toISOString().split('T')[0] - this converts IST to UTC incorrectly
-// Instead, use IST-aware date string generation functions
 function getDateRange(filter: string) {
   switch (filter) {
     case "today": {
@@ -75,82 +73,71 @@ export async function GET(request: Request) {
     console.log("REPORTS_BUSINESS_ID_FROM_USER:", businessId);
 
     const { searchParams } = new URL(request.url);
-    let filterType = searchParams.get("filter") || "all_time"; // Get filter type
-    let startDate = searchParams.get("startDate");
-    let endDate = searchParams.get("endDate");
-    let selectedManagerId = searchParams.get("managerId"); // For Super Admin manager-split mode
+    let filterType = searchParams.get("filter") || "all_time";
+    let startDateString = searchParams.get("startDate");
+    let endDateString = searchParams.get("endDate");
+    let selectedManagerId = searchParams.get("managerId");
     
-    console.log("REPORTS_PARAMS_RECEIVED:", { filterType, startDate, endDate, selectedManagerId });
+    console.log("REPORTS_PARAMS_RECEIVED:", { filterType, startDateString, endDateString, selectedManagerId });
     
-    // CRITICAL FIX: Do NOT recalculate dates on the API side!
-    // The frontend has already calculated IST-aware dates and sent them as startDate/endDate params.
-    // We must use those dates, not recalculate them (which would use server time zone).
-    // If dates are missing (shouldn't happen), use the getDateRange fallback only for debugging.
-    if (!startDate || !endDate) {
+    // CRITICAL FIX: Convert IST date strings to UTC timestamp ranges for querying
+    let startUTC: Date | null = null;
+    let endUTC: Date | null = null;
+    
+    if (!startDateString || !endDateString) {
       const dateRange = getDateRange(filterType);
-      startDate = dateRange.startDate || startDate;
-      endDate = dateRange.endDate || endDate;
-      console.log("REPORTS_DATES_MISSING_FALLBACK:", { filterType, fallback_startDate: startDate, fallback_endDate: endDate });
+      startDateString = dateRange.startDate || startDateString;
+      endDateString = dateRange.endDate || endDateString;
+      console.log("REPORTS_DATES_MISSING_FALLBACK:", { filterType, fallback_startDate: startDateString, fallback_endDate: endDateString });
     } else {
-      console.log("REPORTS_USING_FRONTEND_DATES:", { filterType, startDate, endDate });
+      console.log("REPORTS_USING_FRONTEND_DATES:", { filterType, startDateString, endDateString });
+    }
+    
+    // Convert date strings to UTC ranges using the same method as dashboard
+    if (startDateString && endDateString) {
+      const utcRange = getCustomRangeIST(startDateString, endDateString);
+      startUTC = utcRange.start;
+      endUTC = utcRange.end;
+      console.log("REPORTS_DATE_CONVERSION:", { dateStrings: { start: startDateString, end: endDateString }, utcRange: { start: startUTC.toISOString(), end: endUTC.toISOString() } });
     }
     
     // For Super Admin manager-split mode, use the selected manager instead of all data
     let effectiveManagerId = null;
-    let reportMode = "combined"; // combined or individual
+    let reportMode = "combined";
     
     if (userRole === "super_admin" && selectedManagerId) {
-      // Super Admin chose to view a specific manager's data
       effectiveManagerId = selectedManagerId;
       reportMode = "individual";
       console.log("REPORTS_SUPER_ADMIN_MANAGER_SPLIT_MODE: manager mode selected", { selectedManagerId });
     }
 
-    // Safely parse and validate dates
+    // Safely validate UTC dates
     let hasDateFilter = false;
     try {
-      if (startDate && endDate) {
-        // Validate date format (YYYY-MM-DD)
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-          console.log("REPORTS_INVALID_DATE_FORMAT", { startDate, endDate });
-          startDate = null;
-          endDate = null;
+      if (startUTC && endUTC) {
+        if (isNaN(startUTC.getTime()) || isNaN(endUTC.getTime())) {
+          console.log("REPORTS_INVALID_UTC_DATES", { startUTC, endUTC });
+          startUTC = null;
+          endUTC = null;
           hasDateFilter = false;
+        } else if (startUTC > endUTC) {
+          console.log("REPORTS_SWAPPING_DATES", { original_start: startUTC.toISOString(), original_end: endUTC.toISOString() });
+          [startUTC, endUTC] = [endUTC, startUTC];
+          hasDateFilter = true;
         } else {
-          // Verify dates can be parsed
-          const start = new Date(startDate + "T00:00:00Z");
-          const end = new Date(endDate + "T23:59:59Z");
-          if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-            console.log("REPORTS_INVALID_DATE_VALUES", { startDate, endDate });
-            startDate = null;
-            endDate = null;
-            hasDateFilter = false;
-          } else if (start > end) {
-            console.log("REPORTS_SWAPPING_DATES", { original_start: startDate, original_end: endDate });
-            [startDate, endDate] = [endDate, startDate];
-            hasDateFilter = true;
-          } else {
-            hasDateFilter = true;
-          }
+          hasDateFilter = true;
         }
       }
     } catch (err) {
       console.log("REPORTS_DATE_PARSE_ERROR:", err);
-      startDate = null;
-      endDate = null;
+      startUTC = null;
+      endUTC = null;
       hasDateFilter = false;
     }
     
-    console.log("REPORTS_DATE_FILTER_READY:", { hasDateFilter, startDate, endDate });
-    
-    // CRITICAL FIX: Do NOT fall back to all-time data if date range has no matches
-    // Instead, return zeros/empty sections to respect the user's filter selection
-    // The queries below will naturally return empty/zero results if no data matches the date range
+    console.log("REPORTS_DATE_FILTER_READY:", { hasDateFilter, startUTC: startUTC?.toISOString(), endUTC: endUTC?.toISOString() });
 
-    // Get summary metrics with NEW business logic:
-    // - Created/Cancelled/Closed = event counts during range
-    // - Unassigned/Assigned/In Progress/Action Required/Under Services = snapshot counts at end of range
+    // Get summary metrics
     let summaryQuery;
     let summaryData = {
       created_count: 0,
@@ -167,22 +154,17 @@ export async function GET(request: Request) {
     try {
       console.log("REPORTS_SUMMARY_QUERY_START");
       
-      // Determine which manager to filter by
       const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
       
-      // 1. EVENT COUNTS (created, cancelled, closed during range)
-      // CRITICAL: Use SAME logic as Dashboard
-      // - Created: count calls where created_at (in local TZ) falls in range
-      // - Cancelled: count calls where call_status = 'cancelled' AND updated_at (in local TZ) falls in range
-      // - Closed: count calls where call_status = 'closed' AND closure_timestamp (in local TZ) falls in range
+      // 1. EVENT COUNTS - direct UTC timestamp comparison
       try {
         let eventCountQuery;
         if (hasDateFilter && managerFilterId) {
           eventCountQuery = await sql`
             SELECT
-              COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as created_during_range,
-              COUNT(*) FILTER (WHERE call_status = 'cancelled' AND (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as cancelled_during_range,
-              COUNT(*) FILTER (WHERE call_status = 'closed' AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as closed_during_range
+              COUNT(*) FILTER (WHERE created_at >= ${startUTC} AND created_at <= ${endUTC}) as created_during_range,
+              COUNT(*) FILTER (WHERE call_status = 'cancelled' AND updated_at >= ${startUTC} AND updated_at <= ${endUTC}) as cancelled_during_range,
+              COUNT(*) FILTER (WHERE call_status = 'closed' AND closure_timestamp >= ${startUTC} AND closure_timestamp <= ${endUTC}) as closed_during_range
             FROM service_call
             WHERE business_id = ${businessId}
             AND manager_user_id = ${managerFilterId}
@@ -190,9 +172,9 @@ export async function GET(request: Request) {
         } else if (hasDateFilter) {
           eventCountQuery = await sql`
             SELECT
-              COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as created_during_range,
-              COUNT(*) FILTER (WHERE call_status = 'cancelled' AND (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as cancelled_during_range,
-              COUNT(*) FILTER (WHERE call_status = 'closed' AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date) as closed_during_range
+              COUNT(*) FILTER (WHERE created_at >= ${startUTC} AND created_at <= ${endUTC}) as created_during_range,
+              COUNT(*) FILTER (WHERE call_status = 'cancelled' AND updated_at >= ${startUTC} AND updated_at <= ${endUTC}) as cancelled_during_range,
+              COUNT(*) FILTER (WHERE call_status = 'closed' AND closure_timestamp >= ${startUTC} AND closure_timestamp <= ${endUTC}) as closed_during_range
             FROM service_call
             WHERE business_id = ${businessId}
           `;
@@ -222,14 +204,12 @@ export async function GET(request: Request) {
           summaryData.cancelled_count = Number(eventCountQuery[0].cancelled_during_range || 0);
           summaryData.closed_count = Number(eventCountQuery[0].closed_during_range || 0);
         }
-        console.log("REPORTS_EVENT_COUNTS (FIXED LOGIC)", { created: summaryData.created_count, cancelled: summaryData.cancelled_count, closed: summaryData.closed_count });
+        console.log("REPORTS_EVENT_COUNTS", { created: summaryData.created_count, cancelled: summaryData.cancelled_count, closed: summaryData.closed_count });
       } catch (err) {
         console.error("REPORTS_EVENT_COUNT_FAILED:", err);
       }
       
-      // 2. SNAPSHOT COUNTS (as of END of range)
-      // These are current statuses for calls that were created by end-of-range date
-      // BUG FIX #2: Add startDate filter to snapshot queries (was only using endDate)
+      // 2. SNAPSHOT COUNTS
       try {
         let snapshotQuery;
         if (hasDateFilter && managerFilterId) {
@@ -243,8 +223,8 @@ export async function GET(request: Request) {
             FROM service_call
             WHERE business_id = ${businessId}
             AND manager_user_id = ${managerFilterId}
-            AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND created_at >= ${startUTC}
+            AND created_at <= ${endUTC}
           `;
         } else if (hasDateFilter) {
           snapshotQuery = await sql`
@@ -256,8 +236,8 @@ export async function GET(request: Request) {
               COUNT(*) FILTER (WHERE call_status = 'pending_under_services') as under_services_count
             FROM service_call
             WHERE business_id = ${businessId}
-            AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND created_at >= ${startUTC}
+            AND created_at <= ${endUTC}
           `;
         } else if (managerFilterId) {
           snapshotQuery = await sql`
@@ -291,12 +271,12 @@ export async function GET(request: Request) {
           summaryData.action_required_snapshot = Number(snapshotQuery[0].action_required_count || 0);
           summaryData.under_services_snapshot = Number(snapshotQuery[0].under_services_count || 0);
         }
-        console.log("REPORTS_SNAPSHOT_COUNTS (LOCAL_TZ_AWARE)", { unassigned: summaryData.unassigned_snapshot, assigned: summaryData.assigned_snapshot, in_progress: summaryData.in_progress_snapshot, action_required: summaryData.action_required_snapshot, under_services: summaryData.under_services_snapshot });
+        console.log("REPORTS_SNAPSHOT_COUNTS", { unassigned: summaryData.unassigned_snapshot, assigned: summaryData.assigned_snapshot, in_progress: summaryData.in_progress_snapshot, action_required: summaryData.action_required_snapshot, under_services: summaryData.under_services_snapshot });
       } catch (err) {
         console.error("REPORTS_SNAPSHOT_COUNT_FAILED:", err);
       }
       
-      // 3. TOTAL REVENUE (from closed calls during range)
+      // 3. TOTAL REVENUE
       try {
         let revenueQuery;
         if (hasDateFilter && managerFilterId) {
@@ -306,8 +286,8 @@ export async function GET(request: Request) {
             WHERE business_id = ${businessId}
             AND manager_user_id = ${managerFilterId}
             AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND closure_timestamp >= ${startUTC}
+            AND closure_timestamp <= ${endUTC}
           `;
         } else if (hasDateFilter) {
           revenueQuery = await sql`
@@ -315,8 +295,8 @@ export async function GET(request: Request) {
             FROM service_call
             WHERE business_id = ${businessId}
             AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND closure_timestamp >= ${startUTC}
+            AND closure_timestamp <= ${endUTC}
           `;
         } else if (managerFilterId) {
           revenueQuery = await sql`
@@ -360,7 +340,6 @@ export async function GET(request: Request) {
       const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
       
       if (managerFilterId) {
-        // Scoped to a specific manager's engineers
         if (hasDateFilter) {
           engineerPerformanceQuery = await sql`
             SELECT
@@ -373,8 +352,8 @@ export async function GET(request: Request) {
             LEFT JOIN service_call sc ON u.id = sc.assigned_engineer_user_id 
               AND sc.business_id = ${businessId}
               AND sc.manager_user_id = ${managerFilterId}
-              AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-              AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+              AND sc.created_at >= ${startUTC}
+              AND sc.created_at <= ${endUTC}
             WHERE u.business_id = ${businessId} AND u.manager_user_id = ${managerFilterId} AND u.role = 'engineer'
             GROUP BY u.id, u.name
             ORDER BY total_assigned DESC
@@ -397,7 +376,6 @@ export async function GET(request: Request) {
           `;
         }
       } else {
-        // Super Admin: all engineers in business (combined mode)
         if (hasDateFilter) {
           engineerPerformanceQuery = await sql`
             SELECT
@@ -409,8 +387,8 @@ export async function GET(request: Request) {
             FROM "user" u
             LEFT JOIN service_call sc ON u.id = sc.assigned_engineer_user_id 
               AND sc.business_id = ${businessId} 
-              AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-              AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+              AND sc.created_at >= ${startUTC}
+              AND sc.created_at <= ${endUTC}
             WHERE u.business_id = ${businessId} AND u.role = 'engineer'
             GROUP BY u.id, u.name
             ORDER BY total_assigned DESC
@@ -433,11 +411,10 @@ export async function GET(request: Request) {
       }
       
       const engineerCount = Array.isArray(engineerPerformanceQuery) ? engineerPerformanceQuery.length : 0;
-      console.log("REPORTS_ENGINEER_QUERY_SUCCESS", { rows: engineerCount, engineer_linked_call_count: engineerPerformanceQuery?.reduce((sum, e) => sum + Number(e.total_assigned || 0), 0) || 0 });
+      console.log("REPORTS_ENGINEER_QUERY_SUCCESS", { rows: engineerCount });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("REPORTS_ENGINEER_QUERY_FAILED:", errMsg);
-      if (err instanceof Error) console.error("Stack:", err.stack);
       engineerPerformanceQuery = [];
     }
 
@@ -449,7 +426,6 @@ export async function GET(request: Request) {
       const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
       
       if (managerFilterId) {
-        // Scoped to a specific manager's calls
         if (hasDateFilter) {
           categoryPerformanceQuery = await sql`
             SELECT
@@ -462,8 +438,8 @@ export async function GET(request: Request) {
             FROM service_call sc
             WHERE sc.business_id = ${businessId}
             AND sc.manager_user_id = ${managerFilterId}
-            AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND sc.created_at >= ${startUTC}
+            AND sc.created_at <= ${endUTC}
             GROUP BY sc.category_id, sc.category_name_snapshot
             ORDER BY total_calls DESC
           `;
@@ -484,7 +460,6 @@ export async function GET(request: Request) {
           `;
         }
       } else {
-        // Super Admin: all calls' categories (combined mode)
         if (hasDateFilter) {
           categoryPerformanceQuery = await sql`
             SELECT
@@ -496,8 +471,8 @@ export async function GET(request: Request) {
               COUNT(*) FILTER (WHERE sc.call_status = 'cancelled') as cancelled_calls
             FROM service_call sc
             WHERE sc.business_id = ${businessId}
-            AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (sc.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND sc.created_at >= ${startUTC}
+            AND sc.created_at <= ${endUTC}
             GROUP BY sc.category_id, sc.category_name_snapshot
             ORDER BY total_calls DESC
           `;
@@ -519,16 +494,14 @@ export async function GET(request: Request) {
       }
       
       const categoryCount = Array.isArray(categoryPerformanceQuery) ? categoryPerformanceQuery.length : 0;
-      console.log("REPORTS_CATEGORY_QUERY_SUCCESS", { rows: categoryCount, category_linked_call_count: categoryPerformanceQuery?.reduce((sum, c) => sum + Number(c.total_calls || 0), 0) || 0 });
+      console.log("REPORTS_CATEGORY_QUERY_SUCCESS", { rows: categoryCount });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("REPORTS_CATEGORY_QUERY_FAILED:", errMsg);
-      if (err instanceof Error) console.error("Stack:", err.stack);
       categoryPerformanceQuery = [];
     }
 
-    // Get revenue breakdown (only closed calls)
-    // Using final_service_amount, final_material_amount, final_discount_amount from closure
+    // Get revenue breakdown
     let revenueBreakdownQuery;
     try {
       console.log("REPORTS_REVENUE_QUERY_START");
@@ -536,7 +509,6 @@ export async function GET(request: Request) {
       const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
       
       if (managerFilterId) {
-        // Scoped to a specific manager's closed calls
         if (hasDateFilter) {
           revenueBreakdownQuery = await sql`
             SELECT
@@ -552,8 +524,8 @@ export async function GET(request: Request) {
             WHERE business_id = ${businessId} 
             AND manager_user_id = ${managerFilterId}
             AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND closure_timestamp >= ${startUTC}
+            AND closure_timestamp <= ${endUTC}
           `;
         } else {
           revenueBreakdownQuery = await sql`
@@ -573,7 +545,6 @@ export async function GET(request: Request) {
           `;
         }
       } else {
-        // Super Admin: all closed calls (combined mode)
         if (hasDateFilter) {
           revenueBreakdownQuery = await sql`
             SELECT
@@ -587,8 +558,8 @@ export async function GET(request: Request) {
               )::numeric as net_revenue
             FROM service_call
             WHERE business_id = ${businessId} AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND closure_timestamp >= ${startUTC}
+            AND closure_timestamp <= ${endUTC}
           `;
         } else {
           revenueBreakdownQuery = await sql`
@@ -607,17 +578,14 @@ export async function GET(request: Request) {
         }
       }
       
-      const closedCallCount = revenueBreakdownQuery && revenueBreakdownQuery[0] ? 1 : 0; // One row with aggregates
-      console.log("REPORTS_REVENUE_QUERY_SUCCESS", { rows: revenueBreakdownQuery?.length || 0, closed_call_count: closedCallCount });
+      console.log("REPORTS_REVENUE_QUERY_SUCCESS", { rows: revenueBreakdownQuery?.length || 0 });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("REPORTS_REVENUE_QUERY_FAILED:", errMsg);
-      if (err instanceof Error) console.error("Stack:", err.stack);
       revenueBreakdownQuery = [];
     }
 
-    // Get Trend section data (based on selected period, only closed calls)
-    // Shows: Total Closed Calls, Total Revenue, Payment Received, Payment Pending
+    // Get Trend section data
     let trendQuery;
     try {
       console.log("REPORTS_TREND_QUERY_START");
@@ -625,7 +593,6 @@ export async function GET(request: Request) {
       const managerFilterId = effectiveManagerId || (userRole === "manager" ? userId : null);
       
       if (managerFilterId) {
-        // Scoped to a specific manager's closed calls
         if (hasDateFilter) {
           trendQuery = await sql`
             SELECT
@@ -641,8 +608,8 @@ export async function GET(request: Request) {
             WHERE business_id = ${businessId}
             AND manager_user_id = ${managerFilterId}
             AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND closure_timestamp >= ${startUTC}
+            AND closure_timestamp <= ${endUTC}
           `;
         } else {
           trendQuery = await sql`
@@ -662,7 +629,6 @@ export async function GET(request: Request) {
           `;
         }
       } else {
-        // Super Admin: all closed calls (combined mode)
         if (hasDateFilter) {
           trendQuery = await sql`
             SELECT
@@ -677,8 +643,8 @@ export async function GET(request: Request) {
             FROM service_call
             WHERE business_id = ${businessId}
             AND call_status = 'closed'
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= ${startDate}::date
-            AND (closure_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= ${endDate}::date
+            AND closure_timestamp >= ${startUTC}
+            AND closure_timestamp <= ${endUTC}
           `;
         } else {
           trendQuery = await sql`
@@ -702,13 +668,12 @@ export async function GET(request: Request) {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("REPORTS_TREND_QUERY_FAILED:", errMsg);
-      if (err instanceof Error) console.error("Stack:", err.stack);
       trendQuery = [];
     }
     
     console.log("REPORTS_BUILDING_RESPONSE");
 
-    // Ensure safe defaults for all sections - use NEW business logic
+    // Safe defaults
     const safeSummary = summaryQuery && summaryQuery[0] ? {
       created: Number(summaryQuery[0].created_count) || 0,
       cancelled: Number(summaryQuery[0].cancelled_count) || 0,
@@ -730,7 +695,6 @@ export async function GET(request: Request) {
       under_services: 0,
       total_revenue: 0,
     };
-    console.log("REPORTS_SUMMARY_SAFE_DEFAULTS", safeSummary);
 
     const safeEngineers = Array.isArray(engineerPerformanceQuery) ? engineerPerformanceQuery.map(e => ({
       engineer_id: e.engineer_id || '',
@@ -739,7 +703,6 @@ export async function GET(request: Request) {
       total_closed: Number(e.total_closed) || 0,
       total_pending: Number(e.total_pending) || 0,
     })) : [];
-    console.log("REPORTS_ENGINEERS_SAFE_DEFAULTS", { count: safeEngineers.length });
 
     const safeCategories = Array.isArray(categoryPerformanceQuery) ? categoryPerformanceQuery.map(c => ({
       category_id: c.category_id || '',
@@ -749,7 +712,6 @@ export async function GET(request: Request) {
       pending_calls: Number(c.pending_calls) || 0,
       cancelled_calls: Number(c.cancelled_calls) || 0,
     })) : [];
-    console.log("REPORTS_CATEGORIES_SAFE_DEFAULTS", { count: safeCategories.length });
 
     const safeRevenue = revenueBreakdownQuery && revenueBreakdownQuery[0] ? {
       total_service_charges: Number(revenueBreakdownQuery[0].total_service_charges) || 0,
@@ -765,12 +727,7 @@ export async function GET(request: Request) {
       net_revenue: 0,
     };
     
-    // Calculate payment_pending using correct formula: net_revenue - payment_received
-    // CRITICAL: net_revenue already has discount subtracted, so we do NOT subtract discount again
-    // Formula: Total Revenue (service + material - discount) - Payment Received
-    // Clamp to 0 if negative
     safeRevenue.payment_pending = Math.max(0, safeRevenue.net_revenue - safeRevenue.payment_received);
-    console.log("REPORTS_REVENUE_SAFE_DEFAULTS", safeRevenue);
 
     const safeTrend = trendQuery && trendQuery[0] ? {
       total_closed_calls: Number(trendQuery[0].total_closed_calls) || 0,
@@ -783,7 +740,6 @@ export async function GET(request: Request) {
       total_payment_received: 0,
       total_payment_pending: 0,
     };
-    console.log("REPORTS_TREND_SAFE_DEFAULTS", safeTrend);
 
     const finalResponse = {
       summary: safeSummary,
@@ -791,7 +747,7 @@ export async function GET(request: Request) {
       categoryPerformance: safeCategories,
       revenueBreakdown: safeRevenue,
       trend: safeTrend,
-      trendPeriodLabel: filterType === 'today' ? 'Today' : filterType === 'this_week' ? 'This Week' : filterType === 'this_month' ? 'This Month' : `${startDate} to ${endDate}`,
+      trendPeriodLabel: filterType === 'today' ? 'Today' : filterType === 'this_week' ? 'This Week' : filterType === 'this_month' ? 'This Month' : `${startDateString} to ${endDateString}`,
       debug: {
         timezone: tzInfo.timezone,
         current_time: tzInfo.localDateInTz,
@@ -801,8 +757,8 @@ export async function GET(request: Request) {
         report_mode: reportMode,
         filter_type: hasDateFilter ? "date_range" : "all_time",
         selected_filter: filterType,
-        start_date: startDate,
-        end_date: endDate,
+        start_date: startDateString,
+        end_date: endDateString,
       }
     };
 
@@ -819,7 +775,6 @@ export async function GET(request: Request) {
     console.error("Error message:", errorMessage);
     if (error instanceof Error) console.error("Stack:", error.stack);
     
-    // Return safe defaults even on error
     return NextResponse.json({
       summary: {
         created: 0,
