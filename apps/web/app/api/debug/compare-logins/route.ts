@@ -51,10 +51,10 @@ export async function GET(request: Request) {
 
         // Test password verification
         const verifyResult = verifyPassword(
-          \"Admin@12345\",
+          "Admin@12345",
           superAdminAccounts[0].password
         );
-        results.super_admin.test_password = \"Admin@12345\";
+        results.super_admin.test_password = "Admin@12345";
         results.super_admin.password_matches = verifyResult;
       } else {
         results.super_admin.account_found = false;
@@ -103,10 +103,10 @@ export async function GET(request: Request) {
 
         // Test password verification
         const verifyResult = verifyPassword(
-          \"Test@12345\",
+          "Test@12345",
           managerAccounts[0].password
         );
-        results.manager.test_password = \"Test@12345\";
+        results.manager.test_password = "Test@12345";
         results.manager.password_matches = verifyResult;
       } else {
         results.manager.account_found = false;

@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     console.log(`  Salt: ${salt}`);
     console.log(`  Stored hash part: ${storedHashPart?.substring(0, 60)}...`);
 
-    console.log(`  Computing PBKDF2...");
+    console.log(`  Computing PBKDF2...`);
     const computed = crypto
       .pbkdf2Sync(testPassword, salt, 100000, 64, "sha256")
       .toString("hex");
