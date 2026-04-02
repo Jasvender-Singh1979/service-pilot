@@ -21,15 +21,7 @@ export async function POST(request: Request) {
 
     const { latitude, longitude, address } = await request.json();
 
-    // If address is already available, return it
-    if (address && typeof address === 'string' && address.trim().length > 0) {
-      return NextResponse.json({
-        type: 'address',
-        value: address,
-        matched: false,
-      });
-    }
-
+    // REQUIRED PRIORITY: named location → coordinates → address → N/A
     // Check if coordinates match any named location using normalized 3-decimal coordinates
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       const lat = Number(latitude);
@@ -58,7 +50,7 @@ export async function POST(request: Request) {
           });
         }
 
-        // No match found, return coordinates
+        // No named location match found, return coordinates
         return NextResponse.json({
           type: 'coordinates',
           value: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
@@ -68,7 +60,16 @@ export async function POST(request: Request) {
       }
     }
 
-    // Invalid or missing coordinates
+    // If coordinates not available but address exists, return address
+    if (address && typeof address === 'string' && address.trim().length > 0) {
+      return NextResponse.json({
+        type: 'address',
+        value: address,
+        matched: false,
+      });
+    }
+
+    // Nothing available
     return NextResponse.json({
       type: 'unknown',
       value: 'N/A',
