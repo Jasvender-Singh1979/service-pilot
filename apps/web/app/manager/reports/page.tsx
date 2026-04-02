@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import BottomNav from '@/app/components/BottomNav';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/hooks/useAuth';
-import { getTodayRange, getThisWeekRange, getThisMonthRange, getTimezoneInfo } from '@/lib/timezone';
+import { getTodayRangeIST, getThisWeekRangeIST, getThisMonthRangeIST } from '@/lib/dateUtils';
 import { format } from 'date-fns';
 import { formatDateMedium } from '@/lib/date-format';
 
@@ -138,8 +138,8 @@ export default function ManagerReports() {
     }
 
     if (dateFilter === 'today') {
-      // Use timezone-aware "today" range
-      const range = getTodayRange();
+      // Use IST-aware "today" range
+      const range = getTodayRangeIST();
       return {
         start: format(range.start, 'yyyy-MM-dd'),
         end: format(range.end, 'yyyy-MM-dd'),
@@ -148,8 +148,8 @@ export default function ManagerReports() {
     }
 
     if (dateFilter === 'week') {
-      // Use timezone-aware "this week" range (last 7 days)
-      const range = getThisWeekRange();
+      // Use IST-aware "this week" range (last 7 days)
+      const range = getThisWeekRangeIST();
       return {
         start: format(range.start, 'yyyy-MM-dd'),
         end: format(range.end, 'yyyy-MM-dd'),
@@ -158,8 +158,8 @@ export default function ManagerReports() {
     }
 
     if (dateFilter === 'month') {
-      // Use timezone-aware "this month" range (last 30 days)
-      const range = getThisMonthRange();
+      // Use IST-aware "this month" range (last 30 days)
+      const range = getThisMonthRangeIST();
       return {
         start: format(range.start, 'yyyy-MM-dd'),
         end: format(range.end, 'yyyy-MM-dd'),
@@ -168,7 +168,7 @@ export default function ManagerReports() {
     }
 
     // Default to today
-    const range = getTodayRange();
+    const range = getTodayRangeIST();
     return {
       start: format(range.start, 'yyyy-MM-dd'),
       end: format(range.end, 'yyyy-MM-dd'),
