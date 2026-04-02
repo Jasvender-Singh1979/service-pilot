@@ -209,35 +209,31 @@ export async function GET(request: Request) {
         console.error("REPORTS_EVENT_COUNT_FAILED:", err);
       }
       
-      // 2. SNAPSHOT COUNTS
+      // 2. SNAPSHOT COUNTS - Assigned metric now counts calls assigned during the period
       try {
         let snapshotQuery;
         if (hasDateFilter && managerFilterId) {
           snapshotQuery = await sql`
             SELECT
-              COUNT(*) FILTER (WHERE call_status = 'unassigned') as unassigned_count,
-              COUNT(*) FILTER (WHERE call_status = 'assigned') as assigned_count,
-              COUNT(*) FILTER (WHERE call_status = 'in_progress') as in_progress_count,
-              COUNT(*) FILTER (WHERE call_status = 'pending_action_required') as action_required_count,
-              COUNT(*) FILTER (WHERE call_status = 'pending_under_services') as under_services_count
+              COUNT(*) FILTER (WHERE call_status = 'unassigned' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as unassigned_count,
+              COUNT(*) FILTER (WHERE call_status = 'assigned' AND updated_at >= ${startUTC} AND updated_at <= ${endUTC}) as assigned_count,
+              COUNT(*) FILTER (WHERE call_status = 'in_progress' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as in_progress_count,
+              COUNT(*) FILTER (WHERE call_status = 'pending_action_required' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as action_required_count,
+              COUNT(*) FILTER (WHERE call_status = 'pending_under_services' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as under_services_count
             FROM service_call
             WHERE business_id = ${businessId}
             AND manager_user_id = ${managerFilterId}
-            AND created_at >= ${startUTC}
-            AND created_at <= ${endUTC}
           `;
         } else if (hasDateFilter) {
           snapshotQuery = await sql`
             SELECT
-              COUNT(*) FILTER (WHERE call_status = 'unassigned') as unassigned_count,
-              COUNT(*) FILTER (WHERE call_status = 'assigned') as assigned_count,
-              COUNT(*) FILTER (WHERE call_status = 'in_progress') as in_progress_count,
-              COUNT(*) FILTER (WHERE call_status = 'pending_action_required') as action_required_count,
-              COUNT(*) FILTER (WHERE call_status = 'pending_under_services') as under_services_count
+              COUNT(*) FILTER (WHERE call_status = 'unassigned' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as unassigned_count,
+              COUNT(*) FILTER (WHERE call_status = 'assigned' AND updated_at >= ${startUTC} AND updated_at <= ${endUTC}) as assigned_count,
+              COUNT(*) FILTER (WHERE call_status = 'in_progress' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as in_progress_count,
+              COUNT(*) FILTER (WHERE call_status = 'pending_action_required' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as action_required_count,
+              COUNT(*) FILTER (WHERE call_status = 'pending_under_services' AND created_at >= ${startUTC} AND created_at <= ${endUTC}) as under_services_count
             FROM service_call
             WHERE business_id = ${businessId}
-            AND created_at >= ${startUTC}
-            AND created_at <= ${endUTC}
           `;
         } else if (managerFilterId) {
           snapshotQuery = await sql`
