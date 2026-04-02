@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react';
 import BottomNav from '@/app/components/BottomNav';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/hooks/useAuth';
-import { getTodayRangeIST, getThisWeekRangeIST, getThisMonthRangeIST } from '@/lib/dateUtils';
-import { format } from 'date-fns';
+import { getTodayDateStringIST, getThisWeekRangeISTDateStrings, getThisMonthRangeISTDateStrings } from '@/lib/dateUtils';
 import { formatDateMedium } from '@/lib/date-format';
 
 interface SummaryMetrics {
@@ -138,40 +137,40 @@ export default function ManagerReports() {
     }
 
     if (dateFilter === 'today') {
-      // Use IST-aware "today" range
-      const range = getTodayRangeIST();
+      // CRITICAL: Use IST calendar date strings, NOT format UTC dates
+      const today = getTodayDateStringIST();
       return {
-        start: format(range.start, 'yyyy-MM-dd'),
-        end: format(range.end, 'yyyy-MM-dd'),
+        start: today,
+        end: today,
         filterType: 'today',
       };
     }
 
     if (dateFilter === 'week') {
-      // Use IST-aware "this week" range (last 7 days)
-      const range = getThisWeekRangeIST();
+      // CRITICAL: Get IST calendar date strings for week range
+      const range = getThisWeekRangeISTDateStrings();
       return {
-        start: format(range.start, 'yyyy-MM-dd'),
-        end: format(range.end, 'yyyy-MM-dd'),
+        start: range.startDate,
+        end: range.endDate,
         filterType: 'this_week',
       };
     }
 
     if (dateFilter === 'month') {
-      // Use IST-aware "this month" range (last 30 days)
-      const range = getThisMonthRangeIST();
+      // CRITICAL: Get IST calendar date strings for month range
+      const range = getThisMonthRangeISTDateStrings();
       return {
-        start: format(range.start, 'yyyy-MM-dd'),
-        end: format(range.end, 'yyyy-MM-dd'),
+        start: range.startDate,
+        end: range.endDate,
         filterType: 'this_month',
       };
     }
 
     // Default to today
-    const range = getTodayRangeIST();
+    const today = getTodayDateStringIST();
     return {
-      start: format(range.start, 'yyyy-MM-dd'),
-      end: format(range.end, 'yyyy-MM-dd'),
+      start: today,
+      end: today,
       filterType: 'today',
     };
   }

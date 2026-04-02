@@ -76,7 +76,7 @@ function getNowIST(): Date {
  * 
  * CRITICAL GUARD: Validates the result is never NaN-NaN-NaN
  */
-function getTodayDateStringIST(): string {
+export function getTodayDateStringIST(): string {
   const now = getNowIST();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -372,6 +372,44 @@ export function isSameDayIST(date1: Date, date2: Date): boolean {
  */
 export function getTodayISTDateString(): string {
   return getTodayDateStringIST();
+}
+
+/**
+ * Get this week's date range as IST calendar date strings (YYYY-MM-DD format)
+ * CRITICAL: Returns the exact IST dates to pass to API, not UTC timestamps
+ * @returns { startDate, endDate } as YYYY-MM-DD strings
+ */
+export function getThisWeekRangeISTDateStrings(): { startDate: string; endDate: string } {
+  const nowIST = getNowIST();
+  const sixDaysAgo = new Date(nowIST);
+  sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+  
+  const startString = `${sixDaysAgo.getFullYear()}-${String(sixDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(sixDaysAgo.getDate()).padStart(2, '0')}`;
+  const endString = getTodayDateStringIST();
+  
+  return {
+    startDate: startString,
+    endDate: endString
+  };
+}
+
+/**
+ * Get this month's date range as IST calendar date strings (YYYY-MM-DD format)
+ * CRITICAL: Returns the exact IST dates to pass to API, not UTC timestamps
+ * @returns { startDate, endDate } as YYYY-MM-DD strings
+ */
+export function getThisMonthRangeISTDateStrings(): { startDate: string; endDate: string } {
+  const nowIST = getNowIST();
+  const twentyNineDaysAgo = new Date(nowIST);
+  twentyNineDaysAgo.setDate(twentyNineDaysAgo.getDate() - 29);
+  
+  const startString = `${twentyNineDaysAgo.getFullYear()}-${String(twentyNineDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(twentyNineDaysAgo.getDate()).padStart(2, '0')}`;
+  const endString = getTodayDateStringIST();
+  
+  return {
+    startDate: startString,
+    endDate: endString
+  };
 }
 
 /**
