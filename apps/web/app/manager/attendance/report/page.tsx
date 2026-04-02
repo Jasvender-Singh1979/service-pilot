@@ -150,8 +150,9 @@ function AttendanceReportContent() {
     const locations: ResolvedLocation = {};
     
     for (const record of attendanceRecords) {
-      // Resolve check-in location
-      if (record.check_in_latitude && record.check_in_longitude) {
+      // Resolve check-in location if any location data exists
+      // Use OR (||) not AND (&&) so it resolves if coordinates OR address exist
+      if (record.check_in_latitude || record.check_in_longitude || record.check_in_address) {
         const checkInKey = `checkin-${record.attendance_date}`;
         locations[checkInKey] = await formatLocationAsync(
           record.check_in_latitude,
@@ -160,8 +161,8 @@ function AttendanceReportContent() {
         );
       }
       
-      // Resolve check-out location
-      if (record.check_out_time && record.check_out_latitude && record.check_out_longitude) {
+      // Resolve check-out location if check-out exists and any location data exists
+      if (record.check_out_time && (record.check_out_latitude || record.check_out_longitude || record.check_out_address)) {
         const checkOutKey = `checkout-${record.attendance_date}`;
         locations[checkOutKey] = await formatLocationAsync(
           record.check_out_latitude,
@@ -421,8 +422,8 @@ function AttendanceReportContent() {
                   {records.map((record) => {
                     const checkInKey = `checkin-${record.attendance_date}`;
                     const checkOutKey = `checkout-${record.attendance_date}`;
-                    const checkInLoc = resolvedLocations[checkInKey] || 'Resolving...';
-                    const checkOutLoc = resolvedLocations[checkOutKey] || 'Resolving...';
+                    const checkInLoc = resolvedLocations[checkInKey];
+                    const checkOutLoc = resolvedLocations[checkOutKey];
                     
                     return (
                       <div key={record.attendance_date} className="p-4 bg-white rounded-[10px] border border-slate-200 space-y-3">

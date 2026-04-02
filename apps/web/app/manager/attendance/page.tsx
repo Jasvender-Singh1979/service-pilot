@@ -95,7 +95,8 @@ function AttendanceDashboardContent() {
     const locations: ResolvedLocation = {};
     
     for (const engineer of engineerList) {
-      // Resolve check-in location
+      // Resolve check-in location if any location data exists
+      // Use OR (||) not AND (&&) so it resolves if coordinates OR address exist
       if (engineer.check_in_latitude || engineer.check_in_longitude || engineer.check_in_address) {
         const checkInKey = `checkin-${engineer.id}`;
         locations[checkInKey] = await formatLocationAsync(
@@ -105,7 +106,7 @@ function AttendanceDashboardContent() {
         );
       }
       
-      // Resolve check-out location
+      // Resolve check-out location if check-out exists and any location data exists
       if (engineer.check_out_time && (engineer.check_out_latitude || engineer.check_out_longitude || engineer.check_out_address)) {
         const checkOutKey = `checkout-${engineer.id}`;
         locations[checkOutKey] = await formatLocationAsync(
@@ -287,7 +288,7 @@ function AttendanceDashboardContent() {
                     {engineer.check_out_address || engineer.check_out_latitude || engineer.check_out_longitude ? (
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-[11px] text-slate-500">
-                          {resolvedLocations[`checkout-${engineer.id}`] || 'Resolving...'}
+                          {resolvedLocations[`checkout-${engineer.id}`] || 'Loading...'}
                         </span>
                         {Number.isFinite(Number(engineer.check_out_latitude)) && Number.isFinite(Number(engineer.check_out_longitude)) && (
                           <a
@@ -391,7 +392,7 @@ function AttendanceDashboardContent() {
                     {selectedEngineer.check_in_latitude || selectedEngineer.check_in_longitude || selectedEngineer.check_in_address ? (
                       <>
                         <div className="text-xs text-slate-700 mb-2">
-                          {resolvedLocations[`checkin-${selectedEngineer.id}`] || 'Resolving...'}
+                          {resolvedLocations[`checkin-${selectedEngineer.id}`] || 'Loading...'}
                         </div>
                         {Number.isFinite(Number(selectedEngineer.check_in_latitude)) &&
                           Number.isFinite(Number(selectedEngineer.check_in_longitude)) && (
@@ -419,7 +420,7 @@ function AttendanceDashboardContent() {
                       selectedEngineer.check_out_address ? (
                         <>
                           <div className="text-xs text-slate-700 mb-2">
-                            {resolvedLocations[`checkout-${selectedEngineer.id}`] || 'Resolving...'}
+                            {resolvedLocations[`checkout-${selectedEngineer.id}`] || 'Loading...'}
                           </div>
                           {Number.isFinite(Number(selectedEngineer.check_out_latitude)) &&
                             Number.isFinite(Number(selectedEngineer.check_out_longitude)) && (
