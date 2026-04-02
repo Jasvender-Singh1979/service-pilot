@@ -23,11 +23,12 @@ interface AttendanceRecord {
   attendance_date: string;
   check_in_time: string | null;
   check_out_time: string | null;
-  check_in_latitude: number | null;
-  check_in_longitude: number | null;
+  // Note: Database returns these as strings, not numbers
+  check_in_latitude: string | number | null;
+  check_in_longitude: string | number | null;
   check_in_address: string | null;
-  check_out_latitude: number | null;
-  check_out_longitude: number | null;
+  check_out_latitude: string | number | null;
+  check_out_longitude: string | number | null;
   check_out_address: string | null;
   worked_duration_minutes: number | null;
   attendance_status: string;

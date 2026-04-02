@@ -103,14 +103,14 @@ export function formatLocation(
  * Async version: Format location with named location resolution
  * Checks if coordinates match a named location, otherwise uses address or coordinates
  * 
- * @param lat - latitude (number, null, or undefined)
- * @param lng - longitude (number, null, or undefined)
+ * @param lat - latitude (number or string, null, or undefined)
+ * @param lng - longitude (number or string, null, or undefined)
  * @param address - location address (string, null, or undefined)
  * @returns Promise<formatted location string>
  */
 export async function formatLocationAsync(
-  lat: number | null | undefined,
-  lng: number | null | undefined,
+  lat: number | string | null | undefined,
+  lng: number | string | null | undefined,
   address: string | null | undefined
 ): Promise<string> {
   try {
@@ -130,5 +130,5 @@ export async function formatLocationAsync(
   }
 
   // Fallback to synchronous version
-  return formatLocation(lat, lng, address);
+  return formatLocation(lat as number | null | undefined, lng as number | null | undefined, address);
 }

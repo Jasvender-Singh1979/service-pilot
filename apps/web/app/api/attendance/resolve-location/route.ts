@@ -23,11 +23,11 @@ export async function POST(request: Request) {
 
     // REQUIRED PRIORITY: named location → coordinates → address → N/A
     // Check if coordinates match any named location using normalized 3-decimal coordinates
-    if (typeof latitude === 'number' && typeof longitude === 'number') {
-      const lat = Number(latitude);
-      const lng = Number(longitude);
+    // Note: latitude and longitude might come as strings from the database, so convert to numbers
+    const lat = latitude !== null && latitude !== undefined ? Number(latitude) : null;
+    const lng = longitude !== null && longitude !== undefined ? Number(longitude) : null;
 
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
         // Normalize coordinates to 3 decimal places for matching
         const normalizedLat = Number(lat.toFixed(3));
         const normalizedLng = Number(lng.toFixed(3));
@@ -51,9 +51,10 @@ export async function POST(request: Request) {
         }
 
         // No named location match found, return coordinates
+        const coordValue = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         return NextResponse.json({
           type: 'coordinates',
-          value: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+          value: coordValue,
           matched: false,
           coordinates: { latitude: lat, longitude: lng },
         });
