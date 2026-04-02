@@ -28,6 +28,7 @@ interface EngineerAttendance {
   completion_status: string | null;
   assigned_calls_count: number;
   attendance_date?: string;
+  timeliness?: string | null; // "on_time", "late", or null
 }
 
 interface Summary {
@@ -35,6 +36,8 @@ interface Summary {
   checked_out_count: number;
   not_checked_in_count: number;
   total_engineers: number;
+  on_time_count?: number;
+  late_count?: number;
 }
 
 function AttendanceDashboardContent() {
@@ -89,43 +92,49 @@ function AttendanceDashboardContent() {
     }
   };
 
-  const getStatusBadgeColor = (status: string | null) => {
+  const getStatusBadgeColor = (engineer: EngineerAttendance) => {
+    const status = getStatusLabel(engineer);
     switch (status) {
-      case 'checked_in':
+      case 'Checked In':
         return 'bg-green-100 text-green-700';
-      case 'checked_out':
+      case 'Checked Out':
         return 'bg-blue-100 text-blue-700';
       default:
         return 'bg-slate-100 text-slate-700';
     }
   };
 
-  const getStatusLabel = (status: string | null) => {
-    if (!status) return 'Awaited';
-    switch (status) {
-      case 'checked_in':
-        return 'Checked In';
-      case 'checked_out':
-        return 'Checked Out';
-      default:
-        return 'Awaited';
+  const getStatusLabel = (engineer: EngineerAttendance) => {
+    // BUSINESS RULE: Determine status from check-in/check-out times, not from attendance_status column
+    if (!engineer.check_in_time) {
+      return 'Awaited';  // No check-in yet
     }
+    if (engineer.check_in_time && !engineer.check_out_time) {
+      return 'Checked In';  // Has check-in, no check-out yet
+    }
+    if (engineer.check_in_time && engineer.check_out_time) {
+      return 'Checked Out';  // Has both check-in and check-out
+    }
+    return 'Awaited';
   };
 
-  const getTimingBadgeColor = (checkInTime: string | null, checkOutTime: string | null) => {
-    if (!checkInTime) return null;
-    // For now, show badge only if we have timing data
-    return 'bg-amber-100 text-amber-700';
+  const getTimingBadgeColor = (timeliness: string | null) => {
+    if (!timeliness) return null;
+    if (timeliness === 'on_time') return 'bg-emerald-100 text-emerald-700';
+    if (timeliness === 'late') return 'bg-orange-100 text-orange-700';
+    return null;
   };
 
-  const getTimingLabel = (checkInTime: string | null) => {
-    if (!checkInTime) return null;
-    // Simplified: would need cutoff time from API for accurate determination
-    return 'On Time';
+  const getTimingLabel = (timeliness: string | null) => {
+    if (!timeliness) return null;
+    if (timeliness === 'on_time') return 'On Time';
+    if (timeliness === 'late') return 'Late';
+    return null;
   };
 
+  // BUSINESS RULE: Present = has check_in_time today (regardless of check_out_time)
   const presentEngineersCount = engineers.filter(e => 
-    e.attendance_status === 'checked_in' || e.attendance_status === 'checked_out'
+    e.check_in_time !== null && e.check_in_time !== undefined
   ).length;
 
   if (loading) {
@@ -156,9 +165,9 @@ function AttendanceDashboardContent() {
             <div className="text-xs text-green-600 font-bold uppercase tracking-wide mb-1">Present</div>
             <div className="text-3xl font-black text-green-700">{presentEngineersCount}</div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-[16px] border border-amber-200">
-            <div className="text-xs text-amber-600 font-bold uppercase tracking-wide mb-1">Late</div>
-            <div className="text-3xl font-black text-amber-700">0</div>
+          <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-[16px] border border-orange-200">
+            <div className="text-xs text-orange-600 font-bold uppercase tracking-wide mb-1">Late</div>
+            <div className="text-3xl font-black text-orange-700">{summary.late_count || 0}</div>
           </div>
         </div>
       </div>
@@ -261,12 +270,12 @@ function AttendanceDashboardContent() {
 
                 {/* STATUS & TIMING BADGES */}
                 <div className="flex flex-wrap gap-2">
-                  <span className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold uppercase tracking-wider ${getStatusBadgeColor(engineer.attendance_status)}`}>
-                    {getStatusLabel(engineer.attendance_status)}
+                  <span className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold uppercase tracking-wider ${getStatusBadgeColor(engineer)}`}>
+                    {getStatusLabel(engineer)}
                   </span>
-                  {getTimingLabel(engineer.check_in_time) && (
-                    <span className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold uppercase tracking-wider ${getTimingBadgeColor(engineer.check_in_time, engineer.check_out_time)}`}>
-                      {getTimingLabel(engineer.check_in_time)}
+                  {getTimingLabel(engineer.timeliness) && (
+                    <span className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold uppercase tracking-wider ${getTimingBadgeColor(engineer.timeliness)}`}>
+                      {getTimingLabel(engineer.timeliness)}
                     </span>
                   )}
                 </div>
@@ -312,8 +321,8 @@ function AttendanceDashboardContent() {
                 <div className="p-4 bg-slate-50 rounded-[14px] border border-slate-200 space-y-3">
                   <div className="flex justify-between">
                     <span className="text-xs text-slate-600">Status:</span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${getStatusBadgeColor(selectedEngineer.attendance_status)}`}>
-                      {getStatusLabel(selectedEngineer.attendance_status)}
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${getStatusBadgeColor(selectedEngineer)}`}>
+                      {getStatusLabel(selectedEngineer)}
                     </span>
                   </div>
                   <div className="flex justify-between">

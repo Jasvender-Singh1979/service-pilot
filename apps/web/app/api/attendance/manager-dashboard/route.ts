@@ -143,19 +143,26 @@ export async function GET(request: Request) {
     });
 
     // Calculate summary including timeliness counts
-    const checkedInCount = engineersWithTimeliness.filter((e: any) => e.attendance_status === 'checked_in').length;
-    const checkedOutCount = engineersWithTimeliness.filter((e: any) => e.attendance_status === 'checked_out').length;
-    const notCheckedInCount = engineersWithTimeliness.filter((e: any) => !e.attendance_status).length;
+    // CRITICAL: Business rule per user requirement:
+    // - Present = has check_in_time today (regardless of check_out_time)
+    // - Awaited = no check_in_time today
+    // - Live status = checked_in (check-in but no check-out), checked_out (both check-in and check-out)
+    const presentCount = engineersWithTimeliness.filter((e: any) => e.check_in_time !== null && e.check_in_time !== undefined).length;
+    const awaitedCount = engineersWithTimeliness.filter((e: any) => !e.check_in_time).length;
+    const checkedInCount = engineersWithTimeliness.filter((e: any) => e.check_in_time && !e.check_out_time).length;
+    const checkedOutCount = engineersWithTimeliness.filter((e: any) => e.check_in_time && e.check_out_time).length;
     const onTimeCount = engineersWithTimeliness.filter((e: any) => e.timeliness === 'on_time').length;
     const lateCount = engineersWithTimeliness.filter((e: any) => e.timeliness === 'late').length;
 
     const summary = {
       checked_in_count: checkedInCount,
       checked_out_count: checkedOutCount,
-      not_checked_in_count: notCheckedInCount,
+      not_checked_in_count: awaitedCount,
       total_engineers: engineersWithTimeliness.length,
       on_time_count: onTimeCount,  // NEW: count of on-time check-ins
       late_count: lateCount,        // NEW: count of late check-ins
+      present_count: presentCount,  // NEW: total with check-in (Present = Checked In + Checked Out)
+      awaited_count: awaitedCount,  // NEW: total without check-in (Awaited = Not Checked In)
     };
 
     return NextResponse.json({
