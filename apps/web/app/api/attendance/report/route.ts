@@ -1,8 +1,7 @@
 import sql from "@/app/api/utils/sql";
 import { NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth-utils";
-import { checkTimeliness } from "@/lib/attendanceUtils";
-import { getDateRangeIST } from "@/lib/istDateHelper";
+import { checkTimeliness, getDateRangeIST } from "@/lib/istDateHelper";
 
 export async function GET(request: Request) {
   try {
