@@ -150,10 +150,15 @@ export async function GET(request: Request) {
       };
     });
 
-    // Calculate summary (include timeliness in counts)
-    const checkedIn = teamAttendance.filter((a) => a.status === "checked_in").length;
-    const checkedOut = teamAttendance.filter((a) => a.status === "checked_out").length;
-    const notCheckedIn = teamAttendance.filter((a) => a.status === "not_checked_in").length;
+    // Calculate summary
+    // CRITICAL: Present = any engineer who has checked in today (checked_in OR checked_out)
+    // Awaited = no check-in yet (not_checked_in)
+    // Late = checked in after cutoff (timeliness === "late")
+    // On Time = checked in on or before cutoff (timeliness === "on_time")
+    const checkedInStill = teamAttendance.filter((a) => a.status === "checked_in").length;
+    const checkedOutAlready = teamAttendance.filter((a) => a.status === "checked_out").length;
+    const present = checkedInStill + checkedOutAlready;  // PRESENT = has checked in today
+    const awaited = teamAttendance.filter((a) => a.status === "not_checked_in").length;  // AWAITED = hasn't checked in
     const onTime = teamAttendance.filter((a) => a.timeliness === "on_time").length;
     const late = teamAttendance.filter((a) => a.timeliness === "late").length;
 
@@ -161,14 +166,14 @@ export async function GET(request: Request) {
       date: todayDate,
       summary: {
         total: teamAttendance.length,
-        checkedIn,
-        checkedOut,
-        notCheckedIn,
-        onTime,      // NEW: count of engineers who checked in on time
-        late,        // NEW: count of engineers who checked in late
+        checkedIn: present,  // Changed: now returns total who checked in today (was: still logged in)
+        checkedOut: checkedOutAlready,
+        notCheckedIn: awaited,
+        onTime,
+        late,
       },
       team: teamAttendance,
-      cutoffTime,  // Return cutoff time so frontend can display it if needed
+      cutoffTime,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
