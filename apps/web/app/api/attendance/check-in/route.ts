@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         { error: "Invalid date calculation", details: { todayDate } },
         { status: 500 }
       );
-    }"
+    }
 
     // Step 1: SELECT existing attendance record for today
     const existingRecords = await sql`
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
         { error: "Already checked in today. Please check out first." },
         { status: 400 }
       );
-    }"
+    }
 
     let attendance;
 
