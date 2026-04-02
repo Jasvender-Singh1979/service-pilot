@@ -49,7 +49,6 @@ export async function GET(request: Request) {
 
     // Get today's date in IST
     const todayDate = getTodayIST();
-    console.log('[ENGINEER_DASHBOARD_TIME] Today (IST):', todayDate);
     
     // Get date range for selected filter (returns UTC timestamps for DB queries)
     let dateRange: { startDate: string; endDate: string };
@@ -212,7 +211,6 @@ export async function GET(request: Request) {
       if (result && result[0]) {
         assignedToday = parseInt(String(result[0].count)) || 0;
       }
-      console.log('[ENGINEER_DASHBOARD_SUMMARY] Assigned Today:', assignedToday);
     } catch (e) {
       console.error('Error counting assigned today:', e instanceof Error ? e.message : String(e));
     }
@@ -229,7 +227,7 @@ export async function GET(request: Request) {
       if (result && result[0]) {
         completedToday = parseInt(String(result[0].count)) || 0;
       }
-      console.log('[ENGINEER_DASHBOARD_SUMMARY] Closed Today:', completedToday);
+
     } catch (e) {
       console.error('Error counting completed today:', e instanceof Error ? e.message : String(e));
     }
@@ -246,7 +244,6 @@ export async function GET(request: Request) {
       if (result && result[0]) {
         pendingToday = parseInt(String(result[0].count)) || 0;
       }
-      console.log('[ENGINEER_DASHBOARD_SUMMARY] Pending (Open Work):', pendingToday);
     } catch (e) {
       console.error('Error counting pending work:', e instanceof Error ? e.message : String(e));
     }
