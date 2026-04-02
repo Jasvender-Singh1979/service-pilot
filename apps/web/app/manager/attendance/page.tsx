@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
-import { formatLocation } from '@/lib/formatters';
+import { formatLocationAsync } from '@/lib/formatters';
 
 interface EngineerAttendance {
   id: string;
@@ -31,6 +31,10 @@ interface EngineerAttendance {
   timeliness?: string | null; // "on_time", "late", or null
 }
 
+interface ResolvedLocation {
+  [key: string]: string;
+}
+
 interface Summary {
   checked_in_count: number;
   checked_out_count: number;
@@ -52,6 +56,7 @@ function AttendanceDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [selectedEngineer, setSelectedEngineer] = useState<EngineerAttendance | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [resolvedLocations, setResolvedLocations] = useState<ResolvedLocation>({});
 
   useEffect(() => {
     fetchAttendanceDashboard();
@@ -74,6 +79,9 @@ function AttendanceDashboardContent() {
       const data = await response.json();
       setEngineers(data.engineers || []);
       setSummary(data.summary);
+      
+      // Resolve locations asynchronously for all engineers
+      resolveLocations(data.engineers || []);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Error fetching attendance dashboard:', errorMessage);
@@ -81,6 +89,34 @@ function AttendanceDashboardContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resolveLocations = async (engineerList: EngineerAttendance[]) => {
+    const locations: ResolvedLocation = {};
+    
+    for (const engineer of engineerList) {
+      // Resolve check-in location
+      if (engineer.check_in_latitude || engineer.check_in_longitude || engineer.check_in_address) {
+        const checkInKey = `checkin-${engineer.id}`;
+        locations[checkInKey] = await formatLocationAsync(
+          engineer.check_in_latitude,
+          engineer.check_in_longitude,
+          engineer.check_in_address
+        );
+      }
+      
+      // Resolve check-out location
+      if (engineer.check_out_time && (engineer.check_out_latitude || engineer.check_out_longitude || engineer.check_out_address)) {
+        const checkOutKey = `checkout-${engineer.id}`;
+        locations[checkOutKey] = await formatLocationAsync(
+          engineer.check_out_latitude,
+          engineer.check_out_longitude,
+          engineer.check_out_address
+        );
+      }
+    }
+    
+    setResolvedLocations(locations);
   };
 
   const formatTime = (isoString: string | null) => {
@@ -224,7 +260,7 @@ function AttendanceDashboardContent() {
                     {engineer.check_in_address || engineer.check_in_latitude || engineer.check_in_longitude ? (
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-[11px] text-slate-500">
-                          {formatLocation(engineer.check_in_latitude, engineer.check_in_longitude, engineer.check_in_address)}
+                          {resolvedLocations[`checkin-${engineer.id}`] || 'Resolving...'}
                         </span>
                         {Number.isFinite(Number(engineer.check_in_latitude)) && Number.isFinite(Number(engineer.check_in_longitude)) && (
                           <a
@@ -251,7 +287,7 @@ function AttendanceDashboardContent() {
                     {engineer.check_out_address || engineer.check_out_latitude || engineer.check_out_longitude ? (
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-[11px] text-slate-500">
-                          {formatLocation(engineer.check_out_latitude, engineer.check_out_longitude, engineer.check_out_address)}
+                          {resolvedLocations[`checkout-${engineer.id}`] || 'Resolving...'}
                         </span>
                         {Number.isFinite(Number(engineer.check_out_latitude)) && Number.isFinite(Number(engineer.check_out_longitude)) && (
                           <a
@@ -355,11 +391,7 @@ function AttendanceDashboardContent() {
                     {selectedEngineer.check_in_latitude || selectedEngineer.check_in_longitude || selectedEngineer.check_in_address ? (
                       <>
                         <div className="text-xs text-slate-700 mb-2">
-                          {formatLocation(
-                            selectedEngineer.check_in_latitude,
-                            selectedEngineer.check_in_longitude,
-                            selectedEngineer.check_in_address
-                          )}
+                          {resolvedLocations[`checkin-${selectedEngineer.id}`] || 'Resolving...'}
                         </div>
                         {Number.isFinite(Number(selectedEngineer.check_in_latitude)) &&
                           Number.isFinite(Number(selectedEngineer.check_in_longitude)) && (
@@ -387,11 +419,7 @@ function AttendanceDashboardContent() {
                       selectedEngineer.check_out_address ? (
                         <>
                           <div className="text-xs text-slate-700 mb-2">
-                            {formatLocation(
-                              selectedEngineer.check_out_latitude,
-                              selectedEngineer.check_out_longitude,
-                              selectedEngineer.check_out_address
-                            )}
+                            {resolvedLocations[`checkout-${selectedEngineer.id}`] || 'Resolving...'}
                           </div>
                           {Number.isFinite(Number(selectedEngineer.check_out_latitude)) &&
                             Number.isFinite(Number(selectedEngineer.check_out_longitude)) && (
